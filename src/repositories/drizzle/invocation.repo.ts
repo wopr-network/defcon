@@ -81,13 +81,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     const result = this.db
       .update(invocations)
       .set({ completedAt: Date.now(), signal, artifacts: artifacts ?? null })
-      .where(
-        and(
-          eq(invocations.id, id),
-          isNull(invocations.completedAt),
-          isNull(invocations.failedAt),
-        ),
-      )
+      .where(and(eq(invocations.id, id), isNull(invocations.completedAt), isNull(invocations.failedAt)))
       .run();
 
     if (result.changes === 0) {
@@ -107,13 +101,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     const result = this.db
       .update(invocations)
       .set({ failedAt: Date.now(), error })
-      .where(
-        and(
-          eq(invocations.id, id),
-          isNull(invocations.completedAt),
-          isNull(invocations.failedAt),
-        ),
-      )
+      .where(and(eq(invocations.id, id), isNull(invocations.completedAt), isNull(invocations.failedAt)))
       .run();
 
     if (result.changes === 0) {
