@@ -39,6 +39,8 @@ import { createMcpServer, startStdioServer } from "./mcp-server.js";
 
 const DB_DEFAULT = process.env.AGENTIC_DB_PATH ?? "./agentic-flow.db";
 const MIGRATIONS_FOLDER = new URL("../../drizzle", import.meta.url).pathname;
+const REAPER_INTERVAL_DEFAULT = "30000"; // 30s
+const CLAIM_TTL_DEFAULT = "300000"; // 5min
 
 function openDb(dbPath: string) {
   const sqlite = new Database(dbPath);
@@ -117,6 +119,8 @@ program
   .option("--transport <type>", "Transport: stdio or sse", "stdio")
   .option("--port <number>", "Port for SSE transport", "3000")
   .option("--db <path>", "Database path", DB_DEFAULT)
+  .option("--reaper-interval <ms>", "Reaper poll interval in milliseconds", REAPER_INTERVAL_DEFAULT)
+  .option("--claim-ttl <ms>", "Claim TTL in milliseconds", CLAIM_TTL_DEFAULT)
   .action(async (opts) => {
     const { db, sqlite } = openDb(opts.db);
     const deps: McpServerDeps = {
@@ -128,6 +132,17 @@ program
       eventRepo: new DrizzleEventRepository(db),
       integrationRepo: new DrizzleIntegrationRepository(db),
     };
+
+    const engine = new Engine({
+      entityRepo: deps.entities,
+      flowRepo: deps.flows,
+      invocationRepo: deps.invocations,
+      gateRepo: deps.gates,
+      transitionLogRepo: deps.transitions,
+      adapters: new Map(),
+      eventEmitter: new CompositeEventBusAdapter([]),
+    });
+    const stopReaper = engine.startReaper(parseInt(opts.reaperInterval, 10), parseInt(opts.claimTtl, 10));
 
     if (opts.transport === "sse") {
       const { SSEServerTransport } = await import("@modelcontextprotocol/sdk/server/sse.js");
@@ -163,6 +178,7 @@ program
       });
 
       const shutdown = () => {
+        stopReaper();
         httpServer.close();
         sqlite.close();
         process.exit(0);
@@ -173,6 +189,7 @@ program
       // stdio (default)
       console.error("Starting MCP server on stdio...");
       const cleanup = () => {
+        stopReaper();
         sqlite.close();
         process.exit(0);
       };
@@ -190,6 +207,8 @@ program
   .option("--once", "Process one item and exit")
   .option("--poll-interval <ms>", "Poll interval in milliseconds", "5000")
   .option("--db <path>", "Database path", DB_DEFAULT)
+  .option("--reaper-interval <ms>", "Reaper poll interval in milliseconds", REAPER_INTERVAL_DEFAULT)
+  .option("--claim-ttl <ms>", "Claim TTL in milliseconds", CLAIM_TTL_DEFAULT)
   .action(async (opts) => {
     const pollInterval = parseInt(opts.pollInterval, 10);
     if (Number.isNaN(pollInterval) || pollInterval < 100) {
@@ -230,6 +249,8 @@ program
       eventEmitter,
     });
 
+    const stopReaper = engine.startReaper(parseInt(opts.reaperInterval, 10), parseInt(opts.claimTtl, 10));
+
     const runner = new ActiveRunner({
       engine,
       aiAdapter,
@@ -243,6 +264,7 @@ program
     const cleanup = async () => {
       if (closed) return;
       closed = true;
+      stopReaper();
       ac.abort();
       // Give in-flight operations a moment to complete
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -267,6 +289,7 @@ program
 
     if (!closed) {
       closed = true;
+      stopReaper();
       sqlite.close();
     }
   });
