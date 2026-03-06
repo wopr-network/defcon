@@ -6,6 +6,62 @@ Agentic engineering is the discipline where AI agents do the work and determinis
 
 This is not vibe coding. In vibe coding, you prompt an AI and hope the result is correct. In agentic engineering, every AI action passes through deterministic, holistic checks before it can affect the codebase, the infrastructure, or the users.
 
+## The Engine
+
+The methodology describes a system. This repo also ships the primitives to build one.
+
+For a long time, the WOPR pipeline ran on `/wopr:auto` — a ~500-line skill prompt that hand-coded every state transition as an if-statement. "Spec ready" → spawn coder. "CLEAN" → merge. "ISSUES" → spawn fixer. Every new workflow type needed another hand-coded skill. The orchestration logic was frozen in prompts that agents couldn't modify at runtime.
+
+**`src/`** is the flow engine: a configurable state machine runtime that makes this methodology executable without hand-coding it.
+
+A **flow** is a state machine for any type of work. Entities (issues, deployments, incidents) enter a flow and move through states. At each state an agent does work. At each boundary a deterministic gate verifies the output. Transitions fire on signals — not parsed natural language, not regex, but typed strings agents emit via MCP tool call. The entire definition lives in a database. Agents can mutate it at runtime via the admin API. The methodology's self-improvement loop becomes a literal API call.
+
+```
+/wopr:auto (before)          Flow engine (after)
+────────────────────         ──────────────────────────────────
+500-line skill prompt    →   JSON seed file
+if-statement routing     →   signal → transition → gate → state
+hand-coded CI check      →   shell gate: npm test
+manual agent spawning    →   invocation lifecycle per state
+message parsing          →   flow.report({ signal: "pr.created" })
+stuck detection counter  →   conditional transition rule
+slot counting            →   flow-level concurrency config
+new workflow = new skill →   new flow definition in DB
+```
+
+The engine has two execution modes. **Passive**: Claude Code agents connect via MCP and pull work — `flow.claim()`, do the work, `flow.report()`. The engine manages state. **Active**: the engine calls AI provider APIs directly and runs the full pipeline autonomously. Stages can mix modes within the same flow.
+
+The changeset flow seed in `seeds/wopr-changeset.json` is the direct replacement for `/wopr:auto`.
+
+### `src/` — The Engine
+
+```
+src/
+  engine/         state machine, gate evaluator, invocation builder, event emitter, flow spawner
+  repositories/   interfaces + Drizzle/SQLite implementations
+  execution/      MCP server (passive mode), active runner, CLI
+  adapters/       Linear, GitHub, Anthropic, Discord, Webhook, Stdout
+  config/         seed loader + Zod schemas
+```
+
+**Core dependencies:** `better-sqlite3`, `drizzle-orm`, `handlebars`, `@modelcontextprotocol/sdk`, `zod`
+
+```bash
+# Bootstrap from seed
+npx defcon init --seed seeds/wopr-changeset.json
+
+# Serve MCP (passive mode — agents pull work)
+npx defcon serve
+
+# Run autonomous pipeline (active mode)
+npx defcon run --flow changeset
+
+# Check pipeline state
+npx defcon status
+```
+
+---
+
 ## What's In This Repo
 
 ### [`docs/method/`](docs/method/) — The Method
