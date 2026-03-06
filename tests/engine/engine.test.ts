@@ -615,5 +615,33 @@ describe("Engine", () => {
       // If we reach here without an unhandled rejection crash, the test passes
       expect(true).toBe(true);
     });
+
+    it("stopReaper drains all in-flight ticks before returning (no overwrite)", async () => {
+      const mocks = makeMockRepos();
+      let ticksCompleted = 0;
+
+      // Make each tick take 80ms — longer than the 30ms interval so ticks overlap
+      (mocks.invocationRepo.reapExpired as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 80));
+        ticksCompleted++;
+        return [];
+      });
+
+      const engine = new Engine({ ...mocks, adapters: new Map() });
+      const stop = engine.startReaper(30);
+
+      // Wait for at least 3 intervals to fire (90ms) so multiple ticks are queued
+      await new Promise((r) => setTimeout(r, 100));
+
+      // stop() must await the full chain — all queued ticks complete before stop resolves
+      await stop();
+
+      // All ticks that were queued before stop() must have completed
+      expect(ticksCompleted).toBeGreaterThanOrEqual(1);
+      // Verify no tick ran after stop() resolved (no orphaned work)
+      const countAtStop = ticksCompleted;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(ticksCompleted).toBe(countAtStop);
+    });
   });
 });
