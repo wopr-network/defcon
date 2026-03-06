@@ -2,6 +2,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { findTransition } from "../engine/state-machine.js";
 import type {
   IEntityRepository,
   IEventRepository,
@@ -484,26 +485,33 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
   const flow = await deps.flows.get(entity.flowId);
   if (!flow) return errorResult(`Flow not found for entity: ${entityId}`);
 
-  const transition = flow.transitions.find((t) => t.fromState === entity.state && t.trigger === signal);
+  const priorGateResults = await deps.gates.resultsFor(entityId);
+  const entityWithGates = {
+    ...entity,
+    gateResults: priorGateResults.map((r) => ({ gate: r.gateId, passed: r.passed })),
+  };
+
+  let transition: ReturnType<typeof findTransition>;
+  try {
+    transition = findTransition(flow, entity.state, signal, { entity: entityWithGates });
+  } catch (err) {
+    const msg = `Condition evaluation error: ${err instanceof Error ? err.message : String(err)}`;
+    await deps.invocations.fail(activeInvocation.id, msg);
+    return errorResult(msg);
+  }
 
   // Validate the transition exists BEFORE completing the invocation
   if (!transition) {
-    return errorResult(`No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`);
+    const msg = `No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`;
+    await deps.invocations.fail(activeInvocation.id, msg);
+    return errorResult(msg);
   }
 
-  // Check gate BEFORE completing — if gate blocks, fail the invocation so entity can be reclaimed
+  // Gate passed (findTransition verified via entity.gateResults) — record for tracking
   const gatesPassed: string[] = [];
   if (transition.gateId) {
     const gate = await deps.gates.get(transition.gateId);
     if (gate) {
-      // Check if the gate already has a prior passing result — if so, proceed
-      const priorResults = await deps.gates.resultsFor(entityId);
-      const alreadyPassed = priorResults.some((r) => r.gateId === transition.gateId && r.passed === true);
-      if (!alreadyPassed) {
-        const gateError = `Gate '${gate.name}' must be evaluated before transition can proceed. Use a gate evaluator to process this gate.`;
-        await deps.invocations.fail(activeInvocation.id, gateError);
-        return errorResult(gateError);
-      }
       gatesPassed.push(gate.name);
     }
   }
