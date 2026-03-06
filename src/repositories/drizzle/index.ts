@@ -6,3 +6,4 @@ export { DrizzleGateRepository } from "./gate.repo.js";
 export { DrizzleIntegrationRepository } from "./integration.repo.js";
 export { DrizzleIntegrationConfigRepository } from "./integration-config.repo.js";
 export { DrizzleInvocationRepository } from "./invocation.repo.js";
+export { DrizzleTransitionLogRepository } from "./transition-log.repo.js";

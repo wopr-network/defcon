@@ -1,7 +1,10 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { Artifacts, IInvocationRepository, Invocation, Mode } from "../interfaces.js";
+import type * as schema from "./schema.js";
 import { entities, invocations } from "./schema.js";
+
+type Db = BetterSQLite3Database<typeof schema>;
 
 function toInvocation(row: typeof invocations.$inferSelect): Invocation {
   return {
@@ -25,7 +28,7 @@ function toInvocation(row: typeof invocations.$inferSelect): Invocation {
 }
 
 export class DrizzleInvocationRepository implements IInvocationRepository {
-  constructor(private db: BetterSQLite3Database) {}
+  constructor(private db: Db) {}
 
   async create(
     entityId: string,

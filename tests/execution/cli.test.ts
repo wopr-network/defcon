@@ -81,4 +81,54 @@ describe("CLI", () => {
     const output = run(["init"]);
     expect(output).toContain("--seed");
   });
+
+  it("serve --help shows serve options", () => {
+    const output = run(["serve", "--help"]);
+    expect(output).toContain("--transport");
+    expect(output).toContain("--port");
+    expect(output).toContain("--db");
+  });
+
+  it("run --help shows run options", () => {
+    const output = run(["run", "--help"]);
+    expect(output).toContain("--flow");
+    expect(output).toContain("--once");
+    expect(output).toContain("--poll-interval");
+    expect(output).toContain("--db");
+  });
+
+  it("status --help shows status options", () => {
+    const output = run(["status", "--help"]);
+    expect(output).toContain("--flow");
+    expect(output).toContain("--state");
+    expect(output).toContain("--json");
+    expect(output).toContain("--db");
+  });
+
+  it("status prints table for initialized db", () => {
+    const dbPath = join(tmpdir(), `cli-status-${Date.now()}.db`);
+    const seedPath = writeSeedFile(validSeed);
+    run(["init", "--seed", seedPath], { AGENTIC_DB_PATH: dbPath });
+    const output = run(["status"], { AGENTIC_DB_PATH: dbPath });
+    expect(output).toContain("pr-review");
+    if (existsSync(dbPath)) rmSync(dbPath);
+  });
+
+  it("status --json outputs valid JSON", () => {
+    const dbPath = join(tmpdir(), `cli-status-json-${Date.now()}.db`);
+    const seedPath = writeSeedFile(validSeed);
+    run(["init", "--seed", seedPath], { AGENTIC_DB_PATH: dbPath });
+    const output = run(["status", "--json"], { AGENTIC_DB_PATH: dbPath });
+    const parsed = JSON.parse(output);
+    expect(parsed).toHaveProperty("flows");
+    if (existsSync(dbPath)) rmSync(dbPath);
+  });
+
+  it("ingest --help shows ingest options", () => {
+    const output = run(["ingest", "--help"]);
+    expect(output).toContain("--from");
+    expect(output).toContain("--flow");
+    expect(output).toContain("--filter");
+    expect(output).toContain("--dry-run");
+  });
 });
