@@ -72,87 +72,62 @@ These aren't suggestions in a prompt. They're shell commands the engine executes
 
 DEFCON runs in two modes. Same escalation. Same gates. Different driver.
 
-**Mode 1: Your agent drives.** You're already running Claude Code, Cursor, Copilot — whatever. Your agent connects to DEFCON via MCP and asks for work. DEFCON tells it exactly what to do, the agent does it, and DEFCON decides what happens next.
+**Mode 1: Your agent drives.** Your agent connects to DEFCON via MCP. It claims work once. After that, it's just `report`, `report`, `report` — and DEFCON tells it what to do next after each one. The agent doesn't orchestrate. It doesn't decide what state comes next. It does the work, reports what happened, and DEFCON says "here's your next move" or "you're done."
 
 ```
 Agent: flow.claim()
-DEFCON: Here's feat-392. It's in "backlog." Write an implementation spec.
-        Read the codebase. Identify the files, the function signatures,
-        the edge cases. Post the spec as a comment on the issue.
-        When you're done, report back with signal "spec_ready".
+DEFCON: feat-392. State: "backlog". Write an implementation spec — read
+        the codebase, identify the files, the function signatures, the
+        edge cases. Post the spec on the issue. Report "spec_ready".
 
         ... agent writes the spec ...
 
 Agent: flow.report({ signal: "spec_ready" })
-DEFCON: Gate passed. feat-392 is now in "coding." Claim it again when
-        you're ready.
-
-Agent: flow.claim()
-DEFCON: feat-392 is in "coding." Implement the spec you wrote. Create a
-        branch, write failing tests first, then implementation. Push a PR.
-        Report back with signal "pr_created" and the PR URL.
+DEFCON: Gate passed. State: "coding". Implement the spec. Create a branch,
+        write failing tests first, then implementation. Push a PR.
+        Report "pr_created" with the PR URL.
 
         ... agent writes the code, pushes the PR ...
 
 Agent: flow.report({ signal: "pr_created", artifacts: { prUrl: "..." } })
-DEFCON: Running gate... tsc --noEmit: PASS. biome check: PASS. npm test: PASS.
-        Gate passed. feat-392 is now in "reviewing."
+DEFCON: Running gate... tsc: PASS. biome: PASS. tests: PASS.
+        State: "reviewing". Check CI on the PR. Read every review bot
+        comment. Read the diff. Report one of two signals:
 
-Agent: flow.claim()
-DEFCON: feat-392 is in "reviewing." Check CI. Read every review bot
-        comment. Read the diff. Then tell me one of two things:
-
-        → "clean" — everything passes, no findings, ready to merge
+        → "clean" — everything passes, ready to merge
         → "issues" — something's wrong, here's what
 
-        There is no "mostly fine." There is no "minor nit, ship it."
-        Clean, or issues. Pick one.
-
-        ... agent reviews, finds a security bot flagged something ...
+        ... agent reviews, security bot flagged unvalidated input ...
 
 Agent: flow.report({ signal: "issues", artifacts: { findings: "..." } })
-DEFCON: feat-392 is now in "fixing."
-
-        "clean" would have moved to merging. "issues" moves to fixing.
-        Two signals, two completely different paths. The engine decides
-        which path based on the signal — not the agent.
-
-        And here's the magic: that response comes back to your agent
-        in the same MCP call. The agent reported "issues" and DEFCON
-        responded: "Ok. Entity moved to fixing. Spawn a fixer. Here
-        are the findings. Report back when it's done."
-
-        Your agent doesn't need to know the flow definition. It doesn't
-        need to know what states exist or which transitions are valid.
-        It reports what happened. DEFCON tells it what to do next.
-
-Agent: flow.claim()
-DEFCON: feat-392 is in "fixing." Here's what the reviewer found:
-        [security bot: unvalidated user input on line 47 of auth.ts]
+DEFCON: State: "fixing". Here's what the reviewer found:
+        [unvalidated user input on line 47 of auth.ts]
         Fix it. Push. Report "fixes_pushed".
 
-        ... agent fixes, pushes ...
+        That's the fork. "clean" would have gone to merging. "issues"
+        goes to fixing. The agent reported what it found. DEFCON
+        decided the path.
+
+        ... agent fixes the finding, pushes ...
 
 Agent: flow.report({ signal: "fixes_pushed" })
-DEFCON: feat-392 is back in "reviewing." Not forward. Back.
-        A new reviewer will check from scratch.
+DEFCON: State: "reviewing". Back to review. Not forward — back. A fresh
+        check from scratch. Report "clean" or "issues".
 
-        ... agent claims, reviews again, everything clean this time ...
+        ... agent reviews again, everything clean this time ...
 
 Agent: flow.report({ signal: "clean" })
-DEFCON: Gate passed. feat-392 is now in "merging." Merge queue entered.
+DEFCON: Gate passed. State: "merging". Merge queue entered.
 
         ... CI passes on merge commit ...
 
-DEFCON: feat-392 is "done." Merged.
-
-        That security finding? It didn't get swept under the rug. It
-        didn't get deferred to a follow-up ticket. The pipeline would
-        not let the entity move to merging until a reviewer looked at
-        the fixed code and said "clean." The escalation was earned.
+Agent: flow.report({ signal: "merged" })
+DEFCON: feat-392 is done.
 ```
 
-The agent never decides whether the work is good enough. It does the work, reports a signal, and DEFCON runs the gate. The engine decides what moves forward. The agent just follows the escalation path.
+One `claim`. Seven `report`s. The agent never chose what state came next. It never decided "good enough." It never skipped a step. It reported what happened, and DEFCON told it what to do — every single time — until there was nothing left to do.
+
+That security finding on line 47? It didn't get swept under the rug. It didn't get deferred to a follow-up ticket. The pipeline would not advance until a reviewer looked at the fixed code and said "clean." The escalation was earned.
 
 **Mode 2: DEFCON drives.** You give DEFCON your API key. It runs the entire pipeline autonomously — spawning the right agent for each state, feeding it the prompt, parsing the signal, running the gate, advancing the entity. You start it and walk away.
 
