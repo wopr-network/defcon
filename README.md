@@ -114,8 +114,17 @@ Agent: flow.report({ signal: "issues", artifacts: { findings: "..." } })
 DEFCON: feat-392 is now in "fixing."
 
         "clean" would have moved to merging. "issues" moves to fixing.
-        Two signals. Two completely different paths. The agent doesn't
-        choose the path — the signal chooses it, and the engine enforces it.
+        Two signals, two completely different paths. The engine decides
+        which path based on the signal — not the agent.
+
+        And here's the magic: that response comes back to your agent
+        in the same MCP call. The agent reported "issues" and DEFCON
+        responded: "Ok. Entity moved to fixing. Spawn a fixer. Here
+        are the findings. Report back when it's done."
+
+        Your agent doesn't need to know the flow definition. It doesn't
+        need to know what states exist or which transitions are valid.
+        It reports what happened. DEFCON tells it what to do next.
 
 Agent: flow.claim()
 DEFCON: feat-392 is in "fixing." Here's what the reviewer found:
