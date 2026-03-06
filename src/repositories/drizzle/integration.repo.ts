@@ -20,6 +20,6 @@ export class DrizzleIntegrationRepository implements IIntegrationRepository {
         set: { adapter, config: configValue },
       })
       .run();
-    return { capability, adapter, config: configValue };
+    return { id, capability, adapter, config: configValue };
   }
 }
