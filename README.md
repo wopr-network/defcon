@@ -99,25 +99,34 @@ DEFCON: Running gate... tsc --noEmit: PASS. biome check: PASS. npm test: PASS.
         Gate passed. feat-392 is now in "reviewing."
 
 Agent: flow.claim()
-DEFCON: feat-392 is in "reviewing." Check CI status on the PR. Read all
-        review bot comments. Read the diff. If everything is clean,
-        report "clean". If there are findings, report "issues" with
-        the details.
+DEFCON: feat-392 is in "reviewing." Check CI. Read every review bot
+        comment. Read the diff. Then tell me one of two things:
+
+        → "clean" — everything passes, no findings, ready to merge
+        → "issues" — something's wrong, here's what
+
+        There is no "mostly fine." There is no "minor nit, ship it."
+        Clean, or issues. Pick one.
 
         ... agent reviews, finds a security bot flagged something ...
 
 Agent: flow.report({ signal: "issues", artifacts: { findings: "..." } })
-DEFCON: feat-392 is now in "fixing." The findings are attached.
+DEFCON: feat-392 is now in "fixing."
+
+        "clean" would have moved to merging. "issues" moves to fixing.
+        Two signals. Two completely different paths. The agent doesn't
+        choose the path — the signal chooses it, and the engine enforces it.
 
 Agent: flow.claim()
-DEFCON: feat-392 is in "fixing." Here are the findings from the reviewer:
+DEFCON: feat-392 is in "fixing." Here's what the reviewer found:
         [security bot: unvalidated user input on line 47 of auth.ts]
-        Fix them. Push. Report "fixes_pushed".
+        Fix it. Push. Report "fixes_pushed".
 
         ... agent fixes, pushes ...
 
 Agent: flow.report({ signal: "fixes_pushed" })
-DEFCON: feat-392 is back in "reviewing."
+DEFCON: feat-392 is back in "reviewing." Not forward. Back.
+        A new reviewer will check from scratch.
 
         ... agent claims, reviews again, everything clean this time ...
 
@@ -127,6 +136,11 @@ DEFCON: Gate passed. feat-392 is now in "merging." Merge queue entered.
         ... CI passes on merge commit ...
 
 DEFCON: feat-392 is "done." Merged.
+
+        That security finding? It didn't get swept under the rug. It
+        didn't get deferred to a follow-up ticket. The pipeline would
+        not let the entity move to merging until a reviewer looked at
+        the fixed code and said "clean." The escalation was earned.
 ```
 
 The agent never decides whether the work is good enough. It does the work, reports a signal, and DEFCON runs the gate. The engine decides what moves forward. The agent just follows the escalation path.
