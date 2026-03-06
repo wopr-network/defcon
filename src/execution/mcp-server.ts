@@ -495,6 +495,15 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
     result = await deps.engine.processSignal(entityId, signal, artifacts, activeInvocation.id);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // processSignal failed after we already completed the invocation — create a
+    // replacement so the entity can be reclaimed rather than being permanently orphaned.
+    await deps.invocations.create(
+      entityId,
+      activeInvocation.stage,
+      activeInvocation.prompt,
+      activeInvocation.mode,
+      activeInvocation.agentRole ?? undefined,
+    );
     return errorResult(message);
   }
 

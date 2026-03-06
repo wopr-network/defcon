@@ -592,7 +592,7 @@ describe("MCP tool handlers", () => {
       id: "g-2",
       name: "ci_passes",
       type: "command",
-      command: "gh pr checks",
+      command: "false",
       functionRef: null,
       apiConfig: null,
       timeoutMs: 30000,
