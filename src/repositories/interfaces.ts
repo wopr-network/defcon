@@ -211,6 +211,9 @@ export interface IFlowRepository {
   /** Create a new flow definition. */
   create(flow: CreateFlowInput): Promise<Flow>;
 
+  /** List all flow definitions. */
+  list(): Promise<Flow[]>;
+
   /** Get a flow by ID, including its states and transitions. Returns null if not found. */
   get(id: string): Promise<Flow | null>;
 
