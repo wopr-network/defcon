@@ -151,12 +151,17 @@ export class DrizzleFlowRepository implements IFlowRepository {
       promptTemplate: state.promptTemplate ?? null,
       constraints: (state.constraints ?? null) as Record<string, unknown> | null,
     };
-    this.db.insert(stateDefinitions).values(row).run();
-    this.db.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, flowId)).run();
+    this.db.transaction((tx) => {
+      tx.insert(stateDefinitions).values(row).run();
+      tx.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, flowId)).run();
+    });
     return rowToState(row);
   }
 
   async updateState(stateId: string, changes: UpdateStateInput): Promise<State> {
+    const existing = this.db.select().from(stateDefinitions).where(eq(stateDefinitions.id, stateId)).all();
+    if (existing.length === 0) throw new Error(`State not found: ${stateId}`);
+
     const updateValues: Record<string, unknown> = {};
     if (changes.name !== undefined) updateValues.name = changes.name;
     if (changes.agentRole !== undefined) updateValues.agentRole = changes.agentRole;
@@ -165,11 +170,11 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.promptTemplate !== undefined) updateValues.promptTemplate = changes.promptTemplate;
     if (changes.constraints !== undefined) updateValues.constraints = changes.constraints;
 
-    this.db.update(stateDefinitions).set(updateValues).where(eq(stateDefinitions.id, stateId)).run();
+    if (Object.keys(updateValues).length > 0) {
+      this.db.update(stateDefinitions).set(updateValues).where(eq(stateDefinitions.id, stateId)).run();
+    }
 
     const rows = this.db.select().from(stateDefinitions).where(eq(stateDefinitions.id, stateId)).all();
-    if (rows.length === 0) throw new Error(`State not found: ${stateId}`);
-
     this.db.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, rows[0].flowId)).run();
 
     return rowToState(rows[0]);
@@ -191,12 +196,17 @@ export class DrizzleFlowRepository implements IFlowRepository {
       spawnTemplate: transition.spawnTemplate ?? null,
       createdAt: now,
     };
-    this.db.insert(transitionRules).values(row).run();
-    this.db.update(flowDefinitions).set({ updatedAt: now }).where(eq(flowDefinitions.id, flowId)).run();
+    this.db.transaction((tx) => {
+      tx.insert(transitionRules).values(row).run();
+      tx.update(flowDefinitions).set({ updatedAt: now }).where(eq(flowDefinitions.id, flowId)).run();
+    });
     return rowToTransition(row);
   }
 
   async updateTransition(transitionId: string, changes: UpdateTransitionInput): Promise<Transition> {
+    const existing = this.db.select().from(transitionRules).where(eq(transitionRules.id, transitionId)).all();
+    if (existing.length === 0) throw new Error(`Transition not found: ${transitionId}`);
+
     const updateValues: Record<string, unknown> = {};
     if (changes.fromState !== undefined) updateValues.fromState = changes.fromState;
     if (changes.toState !== undefined) updateValues.toState = changes.toState;
@@ -207,11 +217,11 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.spawnFlow !== undefined) updateValues.spawnFlow = changes.spawnFlow;
     if (changes.spawnTemplate !== undefined) updateValues.spawnTemplate = changes.spawnTemplate;
 
-    this.db.update(transitionRules).set(updateValues).where(eq(transitionRules.id, transitionId)).run();
+    if (Object.keys(updateValues).length > 0) {
+      this.db.update(transitionRules).set(updateValues).where(eq(transitionRules.id, transitionId)).run();
+    }
 
     const rows = this.db.select().from(transitionRules).where(eq(transitionRules.id, transitionId)).all();
-    if (rows.length === 0) throw new Error(`Transition not found: ${transitionId}`);
-
     this.db.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, rows[0].flowId)).run();
 
     return rowToTransition(rows[0]);
@@ -221,29 +231,43 @@ export class DrizzleFlowRepository implements IFlowRepository {
     const flow = await this.get(flowId);
     if (!flow) throw new Error(`Flow not found: ${flowId}`);
 
-    const existing = this.db.select().from(flowVersions).where(eq(flowVersions.flowId, flowId)).all();
-    const maxVersion = existing.reduce((max, r) => Math.max(max, r.version), 0);
-    const nextVersion = maxVersion + 1;
-
     const now = Date.now();
     const id = crypto.randomUUID();
     const snapshotData = {
+      id: flow.id,
+      name: flow.name,
+      description: flow.description,
+      entitySchema: flow.entitySchema,
+      initialState: flow.initialState,
+      maxConcurrent: flow.maxConcurrent,
+      maxConcurrentPerRepo: flow.maxConcurrentPerRepo,
+      version: flow.version,
+      createdBy: flow.createdBy,
+      createdAt: flow.createdAt,
+      updatedAt: flow.updatedAt,
       states: flow.states,
       transitions: flow.transitions,
     };
 
-    this.db
-      .insert(flowVersions)
-      .values({
-        id,
-        flowId,
-        version: nextVersion,
-        snapshot: snapshotData as Record<string, unknown>,
-        changedBy: null,
-        changeReason: null,
-        createdAt: now,
-      })
-      .run();
+    const nextVersion = this.db.transaction((tx) => {
+      const existing = tx.select().from(flowVersions).where(eq(flowVersions.flowId, flowId)).all();
+      const maxVersion = existing.reduce((max, r) => Math.max(max, r.version), 0);
+      const version = maxVersion + 1;
+
+      tx.insert(flowVersions)
+        .values({
+          id,
+          flowId,
+          version,
+          snapshot: snapshotData as Record<string, unknown>,
+          changedBy: null,
+          changeReason: null,
+          createdAt: now,
+        })
+        .run();
+
+      return version;
+    });
 
     return {
       id,
@@ -298,7 +322,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
             priority: t.priority ?? 0,
             spawnFlow: t.spawnFlow,
             spawnTemplate: t.spawnTemplate,
-            createdAt: t.createdAt ? new Date(t.createdAt).getTime() : Date.now(),
+            createdAt: t.createdAt ? new Date(t.createdAt).getTime() : null,
           })
           .run();
       }
