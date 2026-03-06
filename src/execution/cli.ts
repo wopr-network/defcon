@@ -50,7 +50,7 @@ function openDb(dbPath: string) {
 }
 
 const program = new Command();
-program.name("agentic").version("0.1.0");
+program.name("defcon").version("0.1.0");
 
 // ─── init ───
 program
@@ -119,14 +119,33 @@ program
   .option("--db <path>", "Database path", DB_DEFAULT)
   .action(async (opts) => {
     const { db, sqlite } = openDb(opts.db);
+    const entityRepo = new DrizzleEntityRepository(db);
+    const flowRepo = new DrizzleFlowRepository(db);
+    const invocationRepo = new DrizzleInvocationRepository(db);
+    const gateRepo = new DrizzleGateRepository(db);
+    const transitionLogRepo = new DrizzleTransitionLogRepository(db);
+
+    const eventEmitter = new CompositeEventBusAdapter([new StdoutAdapter()]);
+
+    const engine = new Engine({
+      entityRepo,
+      flowRepo,
+      invocationRepo,
+      gateRepo,
+      transitionLogRepo,
+      adapters: new Map(),
+      eventEmitter,
+    });
+
     const deps: McpServerDeps = {
-      entities: new DrizzleEntityRepository(db),
-      flows: new DrizzleFlowRepository(db),
-      invocations: new DrizzleInvocationRepository(db),
-      gates: new DrizzleGateRepository(db),
-      transitions: new DrizzleTransitionLogRepository(db),
+      entities: entityRepo,
+      flows: flowRepo,
+      invocations: invocationRepo,
+      gates: gateRepo,
+      transitions: transitionLogRepo,
       eventRepo: new DrizzleEventRepository(db),
       integrationRepo: new DrizzleIntegrationRepository(db),
+      engine,
     };
 
     if (opts.transport === "sse") {

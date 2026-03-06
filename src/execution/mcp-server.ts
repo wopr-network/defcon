@@ -2,6 +2,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Engine } from "../engine/engine.js";
 import type {
   IEntityRepository,
   IEventRepository,
@@ -33,6 +34,7 @@ export interface McpServerDeps {
   transitions: ITransitionLogRepository;
   eventRepo: IEventRepository;
   integrationRepo: IIntegrationRepository;
+  engine?: Engine;
 }
 
 const TOOL_DEFINITIONS = [
@@ -470,9 +472,7 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
   if (!entityId) return errorResult("Missing required parameter: entity_id");
   if (!signal) return errorResult("Missing required parameter: signal");
 
-  const entity = await deps.entities.get(entityId);
-  if (!entity) return errorResult(`Entity not found: ${entityId}`);
-
+  // Complete the active invocation first
   const invocationList = await deps.invocations.findByEntity(entityId);
   const activeInvocation = invocationList.find(
     (inv) => inv.claimedAt !== null && inv.completedAt === null && inv.failedAt === null,
@@ -481,68 +481,53 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
     return errorResult(`No active invocation found for entity: ${entityId}`);
   }
 
-  const flow = await deps.flows.get(entity.flowId);
-  if (!flow) return errorResult(`Flow not found for entity: ${entityId}`);
-
-  const transition = flow.transitions.find((t) => t.fromState === entity.state && t.trigger === signal);
-
-  // Validate the transition exists BEFORE completing the invocation
-  if (!transition) {
-    return errorResult(`No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`);
+  if (!deps.engine) {
+    return errorResult("Engine not available — MCP server started without engine dependency");
   }
 
-  // Check gate BEFORE completing — if gate blocks, fail the invocation so entity can be reclaimed
-  const gatesPassed: string[] = [];
-  if (transition.gateId) {
-    const gate = await deps.gates.get(transition.gateId);
-    if (gate) {
-      // Check if the gate already has a prior passing result — if so, proceed
-      const priorResults = await deps.gates.resultsFor(entityId);
-      const alreadyPassed = priorResults.some((r) => r.gateId === transition.gateId && r.passed === true);
-      if (!alreadyPassed) {
-        const gateError = `Gate '${gate.name}' must be evaluated before transition can proceed. Use a gate evaluator to process this gate.`;
-        await deps.invocations.fail(activeInvocation.id, gateError);
-        return errorResult(gateError);
-      }
-      gatesPassed.push(gate.name);
+  // Delegate to the engine — it handles gate evaluation, transition, event
+  // emission, invocation creation, concurrency checks, and spawn logic.
+  let result: Awaited<ReturnType<typeof deps.engine.processSignal>>;
+  try {
+    result = await deps.engine.processSignal(entityId, signal, artifacts);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return errorResult(message);
+  }
+
+  // Gate blocked — fail the invocation so entity can be reclaimed
+  if (result.gated) {
+    await deps.invocations.fail(activeInvocation.id, result.gateOutput ?? "Gate failed");
+    return jsonResult({
+      new_state: null,
+      gated: true,
+      gate_output: result.gateOutput,
+      next_action: "waiting",
+    });
+  }
+
+  // Transition succeeded — complete the invocation
+  await deps.invocations.complete(activeInvocation.id, signal, artifacts);
+
+  // If the engine created a next invocation, fetch its prompt
+  let nextPrompt: string | null = null;
+  let nextContext: Record<string, unknown> | null = null;
+  if (result.invocationId) {
+    const nextInvocation = await deps.invocations.get(result.invocationId);
+    if (nextInvocation) {
+      nextPrompt = nextInvocation.prompt;
+      nextContext = nextInvocation.context;
     }
   }
 
-  await deps.invocations.complete(activeInvocation.id, signal, artifacts);
-
-  const updated = await deps.entities.transition(entityId, transition.toState, signal, artifacts);
-
-  await deps.transitions.record({
-    entityId,
-    fromState: entity.state,
-    toState: transition.toState,
-    trigger: signal,
-    invocationId: activeInvocation.id,
-    timestamp: new Date(),
-  });
-
-  const newStateDef = flow.states.find((s) => s.name === transition.toState);
-  let nextAction: "claimed" | "waiting" | "completed" = "waiting";
-
-  if (newStateDef?.mode === "passive" && newStateDef.promptTemplate) {
-    await deps.invocations.create(
-      entityId,
-      transition.toState,
-      newStateDef.promptTemplate,
-      "passive",
-      newStateDef.agentRole ?? undefined,
-    );
-  }
-
-  const hasOutgoing = flow.transitions.some((t) => t.fromState === transition.toState);
-  if (!hasOutgoing) {
-    nextAction = "completed";
-  }
+  const nextAction = result.terminal ? "completed" : result.invocationId ? "continue" : "waiting";
 
   return jsonResult({
-    new_state: updated.state,
-    gates_passed: gatesPassed,
+    new_state: result.newState,
+    gates_passed: result.gatesPassed,
     next_action: nextAction,
+    prompt: nextPrompt,
+    context: nextContext,
   });
 }
 

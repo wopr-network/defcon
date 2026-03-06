@@ -88,6 +88,16 @@ export class Engine {
 
       const gateResult = await evaluateGate(gate, entity, this.gateRepo);
       if (!gateResult.passed) {
+        // Persist gate failure context to entity artifacts so the next invocation
+        // prompt can include what went wrong — this is the feedback loop.
+        await this.entityRepo.updateArtifacts(entityId, {
+          lastGateFailure: {
+            gateId: gate.id,
+            gateName: gate.name,
+            output: gateResult.output,
+            failedAt: new Date().toISOString(),
+          },
+        });
         await this.eventEmitter.emit({
           type: "gate.failed",
           entityId,
