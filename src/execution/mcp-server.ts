@@ -495,12 +495,16 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
   try {
     transition = findTransition(flow, entity.state, signal, { entity: entityWithGates });
   } catch (err) {
-    return errorResult(`Condition evaluation error: ${err instanceof Error ? err.message : String(err)}`);
+    const msg = `Condition evaluation error: ${err instanceof Error ? err.message : String(err)}`;
+    await deps.invocations.fail(activeInvocation.id, msg);
+    return errorResult(msg);
   }
 
   // Validate the transition exists BEFORE completing the invocation
   if (!transition) {
-    return errorResult(`No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`);
+    const msg = `No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`;
+    await deps.invocations.fail(activeInvocation.id, msg);
+    return errorResult(msg);
   }
 
   // Gate passed (findTransition verified via entity.gateResults) — record for tracking

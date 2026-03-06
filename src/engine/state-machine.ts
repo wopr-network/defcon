@@ -35,8 +35,8 @@ export function findTransition(
         return candidate;
       }
     } catch (err) {
-      throw new Error(
-        `Condition evaluation failed for transition '${candidate.fromState}' -> '${candidate.toState}' (trigger: '${candidate.trigger}'): ${err instanceof Error ? err.message : String(err)}`,
+      console.warn(
+        `Condition evaluation failed for transition '${candidate.fromState}' -> '${candidate.toState}' (trigger: '${candidate.trigger}'), skipping: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

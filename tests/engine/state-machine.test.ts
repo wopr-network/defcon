@@ -205,6 +205,20 @@ describe("findTransition", () => {
     expect(findTransition(flow, "open", "go", ctxGatePassed)!.toState).toBe("gated");
   });
 
+  it("skips broken template transition and falls through to valid lower-priority transition", () => {
+    const flow = makeFlow({
+      states: [{ name: "open" }, { name: "broken" }, { name: "fallback" }],
+      transitions: [
+        { fromState: "open", toState: "broken", trigger: "go", priority: 10, condition: "{{#if}}" }, // bad template
+        { fromState: "open", toState: "fallback", trigger: "go", priority: 0 },
+      ],
+    });
+    // Should skip broken template (warn) and return the valid fallback
+    const result = findTransition(flow, "open", "go", {});
+    expect(result).not.toBeNull();
+    expect(result!.toState).toBe("fallback");
+  });
+
   it("stuck detection pattern — invocation_count > 3", () => {
     const flow = makeFlow({
       states: [{ name: "review" }, { name: "done" }, { name: "stuck" }],
