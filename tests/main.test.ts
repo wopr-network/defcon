@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import * as mainModule from "../src/main.js";
+import * as mainModule from "../src/main.ts";
 
 describe("project setup", () => {
   it("should export createDatabase, runMigrations, and bootstrap", () => {
