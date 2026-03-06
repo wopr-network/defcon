@@ -68,11 +68,23 @@ That flow diagram looks simple. But every arrow is doing real work. Here's what'
 
 These aren't suggestions in a prompt. They're shell commands the engine executes. `tsc` either exits 0 or it doesn't. `biome check` either passes or it doesn't. The gate is a process that returns a status code. There's nothing to interpret. Nothing to negotiate. Nothing to skip.
 
+### Two Calls. That's the Whole API.
+
+`claim` = *"I'm ready. What needs escalating?"*
+
+DEFCON hands the agent a prompt — the work for the current level. The agent doesn't know the flow. Doesn't know how many levels there are. Doesn't know what comes next. It just gets instructions and a signal to report when it's done.
+
+`report` = *"I did the thing. Am I clear to advance?"*
+
+DEFCON runs the gate. If it passes, the entity advances and the response contains the next prompt — the work for the next level. If it fails, the response says why and what to fix. If the entity reaches a terminal state, the response says "done."
+
+One `claim` to start. Then `report`, `report`, `report` until DEFCON says stop. The agent never decides what level comes next. It never decides "good enough." It does work, reports signals, and DEFCON — based on evidence, not opinion — tells it what to do.
+
 ### See It In Action
 
 DEFCON runs in two modes. Same escalation. Same gates. Different driver.
 
-**Mode 1: Your agent drives.** Your agent connects to DEFCON via MCP. It claims work once. After that, it's just `report`, `report`, `report` — and DEFCON tells it what to do next after each one. The agent doesn't orchestrate. It doesn't decide what state comes next. It does the work, reports what happened, and DEFCON says "here's your next move" or "you're done."
+**Mode 1: Your agent drives.** Your agent connects to DEFCON via MCP. It claims once, then reports its way through the pipeline:
 
 ```
 Agent: flow.claim()
