@@ -1,10 +1,20 @@
 # DEFCON
 
-**You don't get to launch until the system says you're ready.**
+**The machine wants to launch. DEFCON decides if it's earned it.**
 
-DEFCON is a state machine engine for AI-gated software pipelines. Work enters at the beginning and can only reach production by passing every gate in sequence. No skipping levels. No shortcuts. The gates enforce the escalation path — and the escalation path is the point.
+In WarGames, WOPR ran the numbers and concluded: launch. Not because it was angry. Not because it wanted to destroy anything. Because nothing in the system said *not yet*. The escalation path had no brakes — only acceleration. DEFCON 5. DEFCON 4. DEFCON 3. DEFCON 2. DEFCON 1. Launch.
 
-This is not vibe coding. In vibe coding, you prompt an AI and hope the result is correct. DEFCON makes hope irrelevant: every AI action passes through a deterministic gate before it can affect the codebase, the infrastructure, or the users. The gates are the system.
+AI coding pipelines have the same problem.
+
+Left unsupervised, an AI agent will ship. It will merge unreviewed code, deploy untested builds, close tickets with half-finished implementations — not out of malice, but because the pipeline never said *not yet*. You can put the instructions in a prompt. You can ask it to be careful. But a prompt is not a gate. A prompt is a suggestion. And under pressure — when the task is complex, when the context is long, when the model is confident — suggestions get skipped.
+
+The gap between "the AI did the work" and "the work is correct" is where software goes wrong. And that gap doesn't close by asking the AI to be more diligent. It closes by making diligence structural.
+
+**DEFCON is the system that says *not yet*.**
+
+DEFCON 1 is launch — production, shipped, live. To get there, work must pass through every prior level in sequence. Each transition is a gate. Each gate is deterministic. The pipeline cannot skip DEFCON 3 to reach DEFCON 2. It cannot reach DEFCON 1 without passing DEFCON 2. The escalation is enforced by the machine, not requested in a prompt.
+
+The goal is still launch. DEFCON doesn't prevent it — it makes it mean something. When the pipeline reaches DEFCON 1, it's because every gate passed. Every check ran. Every level was earned. The missile launches because the system verified it should.
 
 ## The Engine
 
