@@ -1,6 +1,5 @@
 import { describe, it, expectTypeOf } from "vitest";
 import type {
-  EngineEventType,
   EngineEvent,
   IIssueTrackerAdapter,
   ICodeHostAdapter,
@@ -11,15 +10,15 @@ import type {
 describe("adapter types compile", () => {
   it("EngineEvent has required fields", () => {
     expectTypeOf<EngineEvent>().toHaveProperty("type");
-    expectTypeOf<EngineEvent>().toHaveProperty("payload");
+    expectTypeOf<Extract<EngineEvent, { type: "entity.created" }>>().toHaveProperty("payload");
     expectTypeOf<EngineEvent>().toHaveProperty("emittedAt");
   });
 
-  it("EngineEventType includes expected values", () => {
-    expectTypeOf<"entity.created">().toMatchTypeOf<EngineEventType>();
-    expectTypeOf<"invocation.completed">().toMatchTypeOf<EngineEventType>();
-    expectTypeOf<"gate.passed">().toMatchTypeOf<EngineEventType>();
-    expectTypeOf<"flow.spawned">().toMatchTypeOf<EngineEventType>();
+  it("EngineEvent type discriminant includes expected values", () => {
+    expectTypeOf<"entity.created">().toMatchTypeOf<EngineEvent["type"]>();
+    expectTypeOf<"invocation.completed">().toMatchTypeOf<EngineEvent["type"]>();
+    expectTypeOf<"gate.passed">().toMatchTypeOf<EngineEvent["type"]>();
+    expectTypeOf<"flow.spawned">().toMatchTypeOf<EngineEvent["type"]>();
   });
 });
 
