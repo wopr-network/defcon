@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../../src/repositories/drizzle/schema.js";
@@ -62,6 +62,10 @@ describe("DrizzleGateRepository", () => {
     const testDb = createTestDb();
     repo = new DrizzleGateRepository(testDb.db);
     sqlite = testDb.sqlite;
+  });
+
+  afterEach(() => {
+    sqlite.close();
   });
 
   describe("create()", () => {
