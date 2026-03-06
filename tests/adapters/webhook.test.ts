@@ -106,7 +106,7 @@ describe("WebhookEventBusAdapter", () => {
 
     const [, opts] = mockFetch.mock.calls[0];
     const body = opts.body;
-    const expectedSig = createHmac("sha256", secret).update(body).digest("hex");
+    const expectedSig = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
     expect(opts.headers["X-Signature"]).toBe(expectedSig);
   });
 

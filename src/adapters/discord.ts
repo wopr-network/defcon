@@ -15,11 +15,16 @@ function eventColor(eventType: string): number {
   return FAILURE_TYPES.has(eventType) ? 0xe74c3c : 0x2ecc71;
 }
 
+function stringifyField(v: unknown): string {
+  const s = typeof v === "object" && v !== null ? JSON.stringify(v) : String(v);
+  return s.length > 1024 ? `${s.slice(0, 1021)}...` : s;
+}
+
 function eventToEmbed(event: EngineEvent): Record<string, unknown> {
   const fields: { name: string; value: string; inline: boolean }[] = [];
   for (const [key, value] of Object.entries(event)) {
     if (key === "type" || key === "emittedAt") continue;
-    fields.push({ name: key, value: String(value), inline: true });
+    fields.push({ name: key, value: stringifyField(value), inline: true });
   }
   return {
     title: event.type,
@@ -48,7 +53,7 @@ export class DiscordEventBusAdapter implements IEventBusAdapter {
     const body = JSON.stringify({ embeds: [eventToEmbed(event)] });
 
     try {
-      await this.fetch(url, {
+      const res = await this.fetch(url, {
         method: "POST",
         headers: {
           Authorization: `Bot ${this.config.token}`,
@@ -56,6 +61,9 @@ export class DiscordEventBusAdapter implements IEventBusAdapter {
         },
         body,
       });
+      if (!res.ok) {
+        console.error(`[discord-adapter] HTTP ${res.status} posting to channel ${route.channel}`);
+      }
     } catch (err) {
       console.error(`[discord-adapter] Failed to send event ${event.type}:`, err);
     }

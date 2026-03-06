@@ -42,7 +42,7 @@ export class WebhookEventBusAdapter implements IEventBusAdapter {
     };
 
     if (endpoint.secret) {
-      headers["X-Signature"] = createHmac("sha256", endpoint.secret).update(body).digest("hex");
+      headers["X-Signature"] = `sha256=${createHmac("sha256", endpoint.secret).update(body).digest("hex")}`;
     }
 
     try {
@@ -53,6 +53,8 @@ export class WebhookEventBusAdapter implements IEventBusAdapter {
         if (!retry.ok) {
           console.error(`[webhook-adapter] Failed to deliver to ${endpoint.url} after retry: ${retry.status}`);
         }
+      } else if (!res.ok) {
+        console.error(`[webhook-adapter] HTTP ${res.status} from ${endpoint.url}`);
       }
     } catch (err) {
       console.error(`[webhook-adapter] Failed to deliver to ${endpoint.url}:`, err);
