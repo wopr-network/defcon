@@ -6,9 +6,11 @@ import type {
   Flow,
   Invocation,
   IEntityRepository,
+  IEventRepository,
   IFlowRepository,
-  IInvocationRepository,
   IGateRepository,
+  IIntegrationRepository,
+  IInvocationRepository,
   ITransitionLogRepository,
 } from "../../src/repositories/interfaces.js";
 
@@ -160,6 +162,7 @@ function createMockDeps(): McpServerDeps {
       createdAt: null,
     }),
     restore: async () => {},
+    listAll: async () => [mockFlow()],
   };
 
   const invocations: IInvocationRepository = {
@@ -210,7 +213,15 @@ function createMockDeps(): McpServerDeps {
     historyFor: async () => [],
   };
 
-  return { entities, flows, invocations, gates, transitions };
+  const eventRepo: IEventRepository = {
+    emitDefinitionChanged: async () => {},
+  };
+
+  const integrationRepo: IIntegrationRepository = {
+    set: async (capability, adapter, config) => ({ capability, adapter, config: config ?? null }),
+  };
+
+  return { entities, flows, invocations, gates, transitions, eventRepo, integrationRepo };
 }
 
 // ─── Tests ───
@@ -276,11 +287,22 @@ describe("MCP tool handlers", () => {
     return result;
   }
 
-  it("lists all 8 tools", async () => {
+  it("lists all 19 tools", async () => {
     const result = await listTools();
-    expect(result.tools).toHaveLength(8);
+    expect(result.tools).toHaveLength(19);
     const names = result.tools.map((t: { name: string }) => t.name).sort();
     expect(names).toEqual([
+      "admin.flow.create",
+      "admin.flow.restore",
+      "admin.flow.snapshot",
+      "admin.flow.update",
+      "admin.gate.attach",
+      "admin.gate.create",
+      "admin.integration.set",
+      "admin.state.create",
+      "admin.state.update",
+      "admin.transition.create",
+      "admin.transition.update",
       "flow.claim",
       "flow.fail",
       "flow.get_prompt",

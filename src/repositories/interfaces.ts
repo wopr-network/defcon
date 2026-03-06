@@ -294,6 +294,25 @@ export interface ITransitionLogRepository {
   historyFor(entityId: string): Promise<TransitionLog[]>;
 }
 
+/** Data-access contract for emitting definition-change events. */
+export interface IEventRepository {
+  /** Emit a definition change event for a tool action. */
+  emitDefinitionChanged(flowId: string | null, tool: string, payload: Record<string, unknown>): Promise<void>;
+}
+
+/** Integration config entry */
+export interface IntegrationConfig {
+  capability: string;
+  adapter: string;
+  config: Record<string, unknown> | null;
+}
+
+/** Data-access contract for integration adapter configuration. */
+export interface IIntegrationRepository {
+  /** Set or update an integration adapter for a capability (upsert). */
+  set(capability: string, adapter: string, config?: Record<string, unknown>): Promise<IntegrationConfig>;
+}
+
 /** Data-access contract for gate definitions and result recording. */
 export interface IGateRepository {
   /** Create a new gate definition. */
