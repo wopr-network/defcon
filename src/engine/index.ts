@@ -7,6 +7,5 @@ export { executeSpawn } from "./flow-spawner.js";
 export type { GateEvalResult } from "./gate-evaluator.js";
 export { evaluateGate } from "./gate-evaluator.js";
 export type { InvocationBuild } from "./invocation-builder.js";
-export { buildInvocation } from "./invocation-builder.js";
 export type { ValidationError } from "./state-machine.js";
 export { evaluateCondition, findTransition, isTerminal, validateFlow } from "./state-machine.js";
