@@ -60,7 +60,7 @@ export interface ICodeHostAdapter {
   createPR(repo: string, data: Record<string, unknown>): Promise<{ number: number; url: string }>;
 
   /** Merge a pull request with the given strategy (merge, squash, rebase). */
-  mergePR(repo: string, number: number, strategy: string): Promise<void>;
+  mergePR(repo: string, number: number, strategy: "merge" | "squash" | "rebase"): Promise<void>;
 
   /** Create a git worktree for isolated work. Returns the worktree path. */
   createWorktree(repo: string, branch: string, path: string): Promise<string>;

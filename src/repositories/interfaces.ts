@@ -49,16 +49,16 @@ export interface GateResult {
   entityId: string;
   gateId: string;
   passed: boolean;
-  output: string;
+  output: string | null;
   evaluatedAt: Date;
 }
 
 /** Audit-log entry for an entity state transition */
 export interface TransitionLog {
   entityId: string;
-  fromState: string;
+  fromState: string | null;
   toState: string;
-  trigger: string;
+  trigger: string | null;
   invocationId: string | null;
   timestamp: Date;
 }
@@ -208,7 +208,7 @@ export interface IFlowRepository {
   getByName(name: string): Promise<Flow | null>;
 
   /** Update a flow's top-level fields. */
-  update(id: string, changes: Partial<Flow>): Promise<Flow>;
+  update(id: string, changes: Partial<Omit<Flow, "states" | "transitions">>): Promise<Flow>;
 
   /** Add a state definition to a flow. */
   addState(flowId: string, state: CreateStateInput): Promise<State>;
