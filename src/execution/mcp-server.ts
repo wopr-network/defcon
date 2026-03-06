@@ -2,6 +2,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { findTransition } from "../engine/state-machine.js";
 import type {
   IEntityRepository,
   IEventRepository,
@@ -484,7 +485,7 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
   const flow = await deps.flows.get(entity.flowId);
   if (!flow) return errorResult(`Flow not found for entity: ${entityId}`);
 
-  const transition = flow.transitions.find((t) => t.fromState === entity.state && t.trigger === signal);
+  const transition = findTransition(flow, entity.state, signal, { entity }, true);
 
   // Validate the transition exists BEFORE completing the invocation
   if (!transition) {

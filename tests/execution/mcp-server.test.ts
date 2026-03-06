@@ -542,7 +542,57 @@ describe("MCP tool handlers", () => {
     expect(completeCalled).toBe(false);
   });
 
-  // Finding 6: limit param is clamped
+  // Finding 6: flow.report uses condition and priority matching (not inline find)
+  it("flow.report uses condition and priority to pick the correct transition", async () => {
+    const flowWithConditions = mockFlow({
+      transitions: [
+        {
+          id: "t-cond-0",
+          flowId: "flow-1",
+          fromState: "draft",
+          toState: "done",
+          trigger: "complete",
+          condition: '{{#if (eq entity.state "wrong")}}true{{/if}}',
+          priority: 0,
+          gateId: null,
+          spawnFlow: null,
+          spawnTemplate: null,
+          createdAt: null,
+        },
+        {
+          id: "t-cond-1",
+          flowId: "flow-1",
+          fromState: "draft",
+          toState: "review",
+          trigger: "complete",
+          condition: null,
+          priority: 1,
+          gateId: null,
+          spawnFlow: null,
+          spawnTemplate: null,
+          createdAt: null,
+        },
+      ],
+    });
+    deps.flows.get = async () => flowWithConditions;
+
+    let transitionedTo: string | null = null;
+    deps.entities.transition = async (_id, toState) => {
+      transitionedTo = toState;
+      return mockEntity({ state: toState });
+    };
+
+    const result = await callTool("flow.report", {
+      entity_id: "ent-1",
+      signal: "complete",
+    });
+
+    expect(result.isError).toBeUndefined();
+    // Priority 1 unconditional transition wins over priority 0 conditional that doesn't match
+    expect(transitionedTo).toBe("review");
+  });
+
+  // Finding 7: limit param is clamped
   it("query.entities clamps limit to valid range", async () => {
     let capturedLimit = 0;
     const allEntities = Array.from({ length: 300 }, (_, i) => mockEntity({ id: `ent-${i}` }));
