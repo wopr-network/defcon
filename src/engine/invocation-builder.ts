@@ -10,19 +10,37 @@ export interface InvocationBuild {
 
 /**
  * Build an invocation's prompt and context from a state definition and entity.
- * Uses Handlebars to render the prompt template with entity data.
+ * Resolves entity refs through adapters (if provided) before rendering.
  */
-export function buildInvocation(state: State, entity: EnrichedEntity): InvocationBuild {
+export async function buildInvocation(
+  state: State,
+  entity: EnrichedEntity,
+  adapters?: Map<string, unknown>,
+): Promise<InvocationBuild> {
+  const resolvedRefs: Record<string, unknown> = {};
+  for (const [key, ref] of Object.entries(entity.refs ?? {})) {
+    const adapter = adapters?.get(ref.adapter);
+    if (adapter && typeof (adapter as Record<string, unknown>).get === "function") {
+      try {
+        resolvedRefs[key] = await (adapter as { get(id: string): Promise<unknown> }).get(ref.id);
+      } catch (err) {
+        console.warn(`[invocation-builder] Failed to resolve ref "${key}" via adapter "${ref.adapter}":`, err);
+      }
+    }
+  }
+
+  const context: Record<string, unknown> = { entity, state, refs: resolvedRefs };
+
   let prompt = "";
   if (state.promptTemplate) {
     const template = getHandlebars().compile(state.promptTemplate);
-    prompt = template({ entity, state });
+    prompt = template(context);
   }
 
   return {
     prompt,
     agentRole: state.agentRole,
     mode: state.mode,
-    context: { entity, state },
+    context,
   };
 }

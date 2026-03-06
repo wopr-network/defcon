@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildInvocation } from "../../src/engine/invocation-builder.js";
 import type { EnrichedEntity, Entity, State } from "../../src/repositories/interfaces.js";
 
@@ -33,38 +33,38 @@ function makeEntity(overrides: Partial<Entity> = {}): Entity {
 }
 
 describe("buildInvocation", () => {
-  it("renders Handlebars prompt template with entity context", () => {
+  it("renders Handlebars prompt template with entity context", async () => {
     const state = makeState();
     const entity = makeEntity();
-    const result = buildInvocation(state, entity);
+    const result = await buildInvocation(state, entity);
     expect(result.prompt).toBe("Implement add auth middleware for wopr-network/wopr#123");
     expect(result.agentRole).toBe("coder");
     expect(result.mode).toBe("active");
   });
 
-  it("returns empty prompt when no template is defined", () => {
+  it("returns empty prompt when no template is defined", async () => {
     const state = makeState({ promptTemplate: null });
     const entity = makeEntity();
-    const result = buildInvocation(state, entity);
+    const result = await buildInvocation(state, entity);
     expect(result.prompt).toBe("");
   });
 
-  it("includes entity and state in context", () => {
+  it("includes entity and state in context", async () => {
     const state = makeState();
     const entity = makeEntity();
-    const result = buildInvocation(state, entity);
+    const result = await buildInvocation(state, entity);
     expect(result.context).toHaveProperty("entity");
     expect(result.context).toHaveProperty("state");
   });
 
-  it("passes mode from state", () => {
+  it("passes mode from state", async () => {
     const state = makeState({ mode: "passive" });
     const entity = makeEntity();
-    const result = buildInvocation(state, entity);
+    const result = await buildInvocation(state, entity);
     expect(result.mode).toBe("passive");
   });
 
-  it("renders built-in helpers from shared Handlebars instance", () => {
+  it("renders built-in helpers from shared Handlebars instance", async () => {
     const state = makeState({
       promptTemplate: "Count: {{invocation_count entity \"coding\"}}",
     });
@@ -76,7 +76,102 @@ describe("buildInvocation", () => {
         { id: "i-3", entityId: "ent-1", stage: "review", agentRole: null, mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
       ],
     };
-    const result = buildInvocation(state, entity);
+    const result = await buildInvocation(state, entity);
     expect(result.prompt).toBe("Count: 2");
+  });
+
+  it("resolves refs through adapters and includes them in template context", async () => {
+    const state = makeState({
+      promptTemplate: "Issue: {{refs.issue.title}} PR: {{refs.pr.key}}",
+    });
+    const entity = makeEntity({
+      refs: {
+        issue: { adapter: "linear", id: "ISS-1" },
+        pr: { adapter: "linear", id: "ISS-2" },
+      },
+    });
+    const mockLinear = {
+      get: vi.fn()
+        .mockResolvedValueOnce({ title: "Fix login bug", id: "ISS-1" })
+        .mockResolvedValueOnce({ key: "WOP-42", id: "ISS-2" }),
+    };
+    const adapters = new Map<string, unknown>([["linear", mockLinear]]);
+
+    const result = await buildInvocation(state, entity, adapters);
+
+    expect(result.prompt).toBe("Issue: Fix login bug PR: WOP-42");
+    expect(result.context.refs).toEqual({
+      issue: { title: "Fix login bug", id: "ISS-1" },
+      pr: { key: "WOP-42", id: "ISS-2" },
+    });
+    expect(mockLinear.get).toHaveBeenCalledWith("ISS-1");
+    expect(mockLinear.get).toHaveBeenCalledWith("ISS-2");
+  });
+
+  it("skips refs when adapter is not in the map", async () => {
+    const state = makeState({
+      promptTemplate: "Hello {{entity.id}}",
+    });
+    const entity = makeEntity({
+      refs: { issue: { adapter: "jira", id: "J-1" } },
+    });
+    const adapters = new Map<string, unknown>(); // no jira adapter
+
+    const result = await buildInvocation(state, entity, adapters);
+
+    expect(result.prompt).toBe("Hello ent-1");
+    expect(result.context.refs).toEqual({});
+  });
+
+  it("skips refs when adapter has no get method", async () => {
+    const state = makeState({
+      promptTemplate: "Hello {{entity.id}}",
+    });
+    const entity = makeEntity({
+      refs: { issue: { adapter: "noop", id: "X-1" } },
+    });
+    const adapters = new Map<string, unknown>([["noop", { emit: vi.fn() }]]);
+
+    const result = await buildInvocation(state, entity, adapters);
+
+    expect(result.prompt).toBe("Hello ent-1");
+    expect(result.context.refs).toEqual({});
+  });
+
+  it("skips ref when adapter.get throws", async () => {
+    const state = makeState({
+      promptTemplate: "Hello {{entity.id}}",
+    });
+    const entity = makeEntity({
+      refs: { issue: { adapter: "linear", id: "BAD-1" } },
+    });
+    const mockLinear = {
+      get: vi.fn().mockRejectedValue(new Error("API down")),
+    };
+    const adapters = new Map<string, unknown>([["linear", mockLinear]]);
+
+    const result = await buildInvocation(state, entity, adapters);
+
+    expect(result.prompt).toBe("Hello ent-1");
+    expect(result.context.refs).toEqual({});
+  });
+
+  it("works with no adapters argument (backward compat)", async () => {
+    const state = makeState();
+    const entity = makeEntity();
+    const result = await buildInvocation(state, entity);
+    expect(result.prompt).toBe("Implement add auth middleware for wopr-network/wopr#123");
+    expect(result.context.refs).toEqual({});
+  });
+
+  it("works when entity.refs is null", async () => {
+    const state = makeState({ promptTemplate: "No refs" });
+    const entity = makeEntity({ refs: null });
+    const adapters = new Map<string, unknown>();
+
+    const result = await buildInvocation(state, entity, adapters);
+
+    expect(result.prompt).toBe("No refs");
+    expect(result.context.refs).toEqual({});
   });
 });
