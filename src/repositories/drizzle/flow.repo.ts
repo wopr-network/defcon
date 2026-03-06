@@ -14,7 +14,10 @@ import type {
   UpdateStateInput,
   UpdateTransitionInput,
 } from "../interfaces.js";
+import type * as schema from "./schema.js";
 import { flowDefinitions, flowVersions, stateDefinitions, transitionRules } from "./schema.js";
+
+type Db = BetterSQLite3Database<typeof schema>;
 
 function toDate(v: number | null | undefined): Date | null {
   return v != null ? new Date(v) : null;
@@ -68,7 +71,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
 }
 
 export class DrizzleFlowRepository implements IFlowRepository {
-  constructor(private db: BetterSQLite3Database) {}
+  constructor(private db: Db) {}
 
   private hydrateFlow(row: typeof flowDefinitions.$inferSelect): Flow {
     const states = this.db
