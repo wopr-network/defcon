@@ -6,14 +6,9 @@ const hbs = getHandlebars();
 // ─── Condition Evaluation ───
 
 export function evaluateCondition(condition: string, context: Record<string, unknown>): boolean {
-  try {
-    const template = hbs.compile(condition);
-    const result = template(context).trim();
-    return result.length > 0 && result !== "false" && result !== "0";
-  } catch (err) {
-    console.error("[state-machine] evaluateCondition error:", err);
-    return false;
-  }
+  const template = hbs.compile(condition);
+  const result = template(context).trim();
+  return result.length > 0 && result !== "false" && result !== "0";
 }
 
 // ─── Transition Matching ───
@@ -35,8 +30,14 @@ export function findTransition(
       const gatePassed = entity?.gateResults?.some((g) => g.gate === candidate.gateId && g.passed) ?? false;
       if (!gatePassed) continue;
     }
-    if (candidate.condition === null || evaluateCondition(candidate.condition, context)) {
-      return candidate;
+    try {
+      if (candidate.condition === null || evaluateCondition(candidate.condition, context)) {
+        return candidate;
+      }
+    } catch (err) {
+      throw new Error(
+        `Condition evaluation failed for transition '${candidate.fromState}' -> '${candidate.toState}' (trigger: '${candidate.trigger}'): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

@@ -537,8 +537,7 @@ describe("MCP tool handlers", () => {
     });
     expect(result.isError).toBe(true);
     expect(gateRecorded).toBe(false);
-    // Gate blocked BEFORE complete — invocation must be failed (not completed) so entity can be reclaimed
-    expect(failCalled).toBe(true);
+    expect(failCalled).toBe(false);
     expect(completeCalled).toBe(false);
   });
 
@@ -587,9 +586,74 @@ describe("MCP tool handlers", () => {
       signal: "complete",
     });
 
-    expect(result.isError).toBeUndefined();
+    expect(result.isError).not.toBe(true);
     // Priority 1 unconditional transition wins over priority 2 conditional that doesn't match
     expect(transitionedTo).toBe("review");
+  });
+
+  // Finding (round 2) 1: condition evaluation errors are surfaced, not swallowed
+  it("flow.report returns isError when transition condition throws (bad template)", async () => {
+    const flowWithBadCondition = mockFlow({
+      transitions: [
+        {
+          id: "t-bad-cond",
+          flowId: "flow-1",
+          fromState: "draft",
+          toState: "review",
+          trigger: "complete",
+          gateId: null,
+          condition: "{{#if}}", // invalid Handlebars — will throw
+          priority: 0,
+          spawnFlow: null,
+          spawnTemplate: null,
+          createdAt: null,
+        },
+      ],
+    });
+    deps.flows.get = async () => flowWithBadCondition;
+    deps.gates.resultsFor = async () => [];
+    const result = await callTool("flow.report", {
+      entity_id: "ent-1",
+      signal: "complete",
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(content[0].text).toMatch(/condition evaluation error/i);
+  });
+
+  // Finding (round 2) 2: no fallback find() — gated-blocked returns generic "No transition" error
+  it("flow.report returns generic no-transition error (no fallback find) when gate not passed", async () => {
+    const flowWithGate = mockFlow({
+      transitions: [
+        {
+          id: "t-gate",
+          flowId: "flow-1",
+          fromState: "draft",
+          toState: "review",
+          trigger: "complete",
+          gateId: "g-1",
+          condition: null,
+          priority: 0,
+          spawnFlow: null,
+          spawnTemplate: null,
+          createdAt: null,
+        },
+      ],
+    });
+    deps.flows.get = async () => flowWithGate;
+    deps.gates.resultsFor = async () => [];
+    let failCalled = false;
+    deps.invocations.fail = async (id, error) => {
+      failCalled = true;
+      return mockInvocation({ id, error, failedAt: new Date() });
+    };
+    const result = await callTool("flow.report", {
+      entity_id: "ent-1",
+      signal: "complete",
+    });
+    expect(result.isError).toBe(true);
+    // No fallback find() — invocation is NOT failed, just returns error
+    expect(failCalled).toBe(false);
   });
 
   // Finding 7: limit param is clamped

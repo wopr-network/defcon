@@ -26,8 +26,8 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("{{missing}}", {})).toBe(false);
   });
 
-  it("returns false on invalid template", () => {
-    expect(evaluateCondition("{{#if}}", {})).toBe(false);
+  it("throws on invalid template", () => {
+    expect(() => evaluateCondition("{{#if}}", {})).toThrow();
   });
 
   it("gt helper works", () => {

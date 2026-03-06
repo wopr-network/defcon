@@ -491,22 +491,15 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
     gateResults: priorGateResults.map((r) => ({ gate: r.gateId, passed: r.passed })),
   };
 
-  const transition = findTransition(flow, entity.state, signal, { entity: entityWithGates });
+  let transition: ReturnType<typeof findTransition>;
+  try {
+    transition = findTransition(flow, entity.state, signal, { entity: entityWithGates });
+  } catch (err) {
+    return errorResult(`Condition evaluation error: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Validate the transition exists BEFORE completing the invocation
   if (!transition) {
-    // Check if a gated transition exists but is blocked — if so, fail the invocation so entity can be reclaimed
-    const blockedGatedCandidate = flow.transitions.find(
-      (t) => t.fromState === entity.state && t.trigger === signal && t.gateId !== null,
-    );
-    if (blockedGatedCandidate?.gateId) {
-      const gate = await deps.gates.get(blockedGatedCandidate.gateId);
-      if (gate) {
-        const gateError = `Gate '${gate.name}' must be evaluated before transition can proceed. Use a gate evaluator to process this gate.`;
-        await deps.invocations.fail(activeInvocation.id, gateError);
-        return errorResult(gateError);
-      }
-    }
     return errorResult(`No transition from state '${entity.state}' with signal '${signal}' in flow '${flow.name}'`);
   }
 
