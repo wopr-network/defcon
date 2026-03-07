@@ -1,0 +1,43 @@
+{
+  "flows": [
+    {
+      "name": "parent-flow",
+      "description": "Parent flow that spawns child-flow on completion",
+      "initialState": "working",
+      "maxConcurrent": 0,
+      "maxConcurrentPerRepo": 0
+    },
+    {
+      "name": "child-flow",
+      "description": "Child flow spawned by parent",
+      "initialState": "pending",
+      "maxConcurrent": 0,
+      "maxConcurrentPerRepo": 0
+    }
+  ],
+  "states": [
+    { "name": "working", "flowName": "parent-flow", "mode": "passive" },
+    { "name": "completed", "flowName": "parent-flow", "mode": "passive" },
+    { "name": "pending", "flowName": "child-flow", "mode": "passive" },
+    { "name": "child-done", "flowName": "child-flow", "mode": "passive" }
+  ],
+  "gates": [],
+  "transitions": [
+    {
+      "flowName": "parent-flow",
+      "fromState": "working",
+      "toState": "completed",
+      "trigger": "finish",
+      "priority": 0,
+      "spawnFlow": "child-flow"
+    },
+    {
+      "flowName": "child-flow",
+      "fromState": "pending",
+      "toState": "child-done",
+      "trigger": "process",
+      "priority": 0
+    }
+  ],
+  "integrations": []
+}

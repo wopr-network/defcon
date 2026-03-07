@@ -1,0 +1,42 @@
+{
+  "flows": [
+    {
+      "name": "gated-pipeline",
+      "description": "Flow with a command gate on the review transition",
+      "initialState": "coding",
+      "maxConcurrent": 0,
+      "maxConcurrentPerRepo": 0
+    }
+  ],
+  "states": [
+    { "name": "coding", "flowName": "gated-pipeline", "mode": "passive" },
+    { "name": "reviewing", "flowName": "gated-pipeline", "mode": "passive" },
+    { "name": "done", "flowName": "gated-pipeline", "mode": "passive" }
+  ],
+  "gates": [
+    {
+      "name": "score-check",
+      "type": "command",
+      "command": "gates/test-fail.sh",
+      "timeoutMs": 5000
+    }
+  ],
+  "transitions": [
+    {
+      "flowName": "gated-pipeline",
+      "fromState": "coding",
+      "toState": "reviewing",
+      "trigger": "submit",
+      "gateName": "score-check",
+      "priority": 0
+    },
+    {
+      "flowName": "gated-pipeline",
+      "fromState": "reviewing",
+      "toState": "done",
+      "trigger": "approve",
+      "priority": 0
+    }
+  ],
+  "integrations": []
+}

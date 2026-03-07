@@ -1,0 +1,28 @@
+{
+  "flows": [
+    {
+      "name": "simple-pipeline",
+      "description": "3-state test flow: backlog -> coding -> done",
+      "initialState": "backlog",
+      "maxConcurrent": 0,
+      "maxConcurrentPerRepo": 0
+    }
+  ],
+  "states": [
+    { "name": "backlog", "flowName": "simple-pipeline", "mode": "passive" },
+    {
+      "name": "coding",
+      "flowName": "simple-pipeline",
+      "agentRole": "coder",
+      "mode": "active",
+      "promptTemplate": "Code the thing for {{entity.id}}"
+    },
+    { "name": "done", "flowName": "simple-pipeline", "mode": "passive" }
+  ],
+  "gates": [],
+  "transitions": [
+    { "flowName": "simple-pipeline", "fromState": "backlog", "toState": "coding", "trigger": "assigned", "priority": 0 },
+    { "flowName": "simple-pipeline", "fromState": "coding", "toState": "done", "trigger": "completed", "priority": 0 }
+  ],
+  "integrations": []
+}
