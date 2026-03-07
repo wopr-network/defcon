@@ -177,6 +177,23 @@ describe("loadSeed", () => {
     sqlite.close();
   });
 
+  it("rejects a path whose prefix matches root but is not a child", async () => {
+    // startsWith("/tmp/foo/") would allow /tmp/foobar — relative() check prevents this
+    const { sqlite, flowRepo, gateRepo, integrationRepo } = setupDb();
+    const dir = join(tmpRoot, `seed-prefix-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const adjacentDir = dir + "-other";
+    mkdirSync(adjacentDir, { recursive: true });
+    const seedPath = join(adjacentDir, "seed.json");
+    writeFileSync(seedPath, JSON.stringify(validSeed));
+
+    await expect(
+      loadSeed(seedPath, flowRepo, gateRepo, integrationRepo, sqlite, { allowedRoot: dir }),
+    ).rejects.toThrow("Seed path escapes allowed root");
+
+    sqlite.close();
+  });
+
   it("accepts a seed path within the allowed root", async () => {
     const { sqlite, flowRepo, gateRepo, integrationRepo } = setupDb();
     const seedPath = writeSeedFile(validSeed);

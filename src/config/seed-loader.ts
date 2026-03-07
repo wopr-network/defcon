@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 import type { IFlowRepository, IGateRepository, IIntegrationConfigRepository } from "../repositories/interfaces.js";
 import { SeedFileSchema } from "./zod-schemas.js";
@@ -26,17 +26,21 @@ export async function loadSeed(
   const resolvedRoot = resolve(allowedRoot);
   const resolvedSeed = resolve(seedPath);
 
-  if (!resolvedSeed.startsWith(`${resolvedRoot}/`) && resolvedSeed !== resolvedRoot) {
+  const lexicalRel = relative(resolvedRoot, resolvedSeed);
+  if (lexicalRel === ".." || lexicalRel.startsWith(`..${sep}`)) {
     throw new Error(`Seed path escapes allowed root: ${resolvedSeed} is not under ${resolvedRoot}`);
   }
 
   let realSeed: string;
   try {
     realSeed = realpathSync(resolvedSeed);
-  } catch {
-    // File doesn't exist — let readFileSync throw its normal ENOENT error
-    const raw = readFileSync(resolvedSeed, "utf-8");
-    return parseSeedAndLoad(raw, flowRepo, gateRepo, integrationRepo, sqlite);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      // File doesn't exist — let readFileSync throw its normal ENOENT error
+      const raw = readFileSync(resolvedSeed, "utf-8");
+      return parseSeedAndLoad(raw, flowRepo, gateRepo, integrationRepo, sqlite);
+    }
+    throw err;
   }
 
   let realRoot: string;
@@ -46,7 +50,8 @@ export async function loadSeed(
     realRoot = resolvedRoot;
   }
 
-  if (!realSeed.startsWith(`${realRoot}/`) && realSeed !== realRoot) {
+  const realRel = relative(realRoot, realSeed);
+  if (realRel === ".." || realRel.startsWith(`..${sep}`)) {
     throw new Error(`Seed path escapes allowed root: resolved symlink ${realSeed} is not under ${realRoot}`);
   }
 
