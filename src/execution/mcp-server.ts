@@ -173,6 +173,7 @@ const TOOL_DEFINITIONS = [
         entitySchema: { type: "object", description: "JSON schema for entity data" },
         maxConcurrent: { type: "number", description: "Max concurrent entities (0=unlimited)" },
         maxConcurrentPerRepo: { type: "number", description: "Max concurrent per repo (0=unlimited)" },
+        affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },
         createdBy: { type: "string", description: "Creator identifier" },
         states: {
           type: "array",
@@ -193,6 +194,7 @@ const TOOL_DEFINITIONS = [
         description: { type: "string" },
         maxConcurrent: { type: "number" },
         maxConcurrentPerRepo: { type: "number" },
+        affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },
         initialState: { type: "string" },
       },
       required: ["flow_name"],
@@ -558,11 +560,20 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
 
   // Set affinity on completion for passive-mode invocations, after processSignal succeeds
   if (workerId && activeInvocation.mode === "passive" && activeInvocation.agentRole) {
-    const entity = await deps.entities.get(entityId);
-    if (entity) {
-      const flow = await deps.flows.get(entity.flowId);
-      const windowMs = flow?.affinityWindowMs ?? 300000;
-      await deps.entities.setAffinity(entityId, workerId, activeInvocation.agentRole, new Date(Date.now() + windowMs));
+    try {
+      const entity = await deps.entities.get(entityId);
+      if (entity) {
+        const flow = await deps.flows.get(entity.flowId);
+        const windowMs = flow?.affinityWindowMs ?? 300000;
+        await deps.entities.setAffinity(
+          entityId,
+          workerId,
+          activeInvocation.agentRole,
+          new Date(Date.now() + windowMs),
+        );
+      }
+    } catch (err) {
+      console.error(`Failed to set affinity for entity ${entityId} worker ${workerId}:`, err);
     }
   }
 
