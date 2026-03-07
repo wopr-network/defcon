@@ -65,6 +65,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     version: r.version ?? 1,
     createdBy: r.createdBy ?? null,
     discipline: r.discipline ?? null,
+    timeoutPrompt: r.timeoutPrompt ?? null,
     createdAt: toDate(r.createdAt),
     updatedAt: toDate(r.updatedAt),
     states,
@@ -106,6 +107,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       version: 1,
       createdBy: input.createdBy ?? null,
       discipline: input.discipline ?? null,
+      timeoutPrompt: input.timeoutPrompt ?? null,
       createdAt: now,
       updatedAt: now,
     };

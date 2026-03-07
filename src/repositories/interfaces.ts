@@ -131,6 +131,7 @@ export interface Flow {
   version: number;
   createdBy: string | null;
   discipline: string | null;
+  timeoutPrompt: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
   states: State[];
@@ -159,6 +160,7 @@ export interface CreateFlowInput {
   affinityWindowMs?: number;
   createdBy?: string;
   discipline?: string;
+  timeoutPrompt?: string;
 }
 
 /** Input for adding a state to a flow */

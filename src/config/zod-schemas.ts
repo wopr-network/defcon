@@ -15,6 +15,12 @@ export const FlowDefinitionSchema = z.object({
   version: z.number().int().min(1).optional().default(1),
   createdBy: z.string().optional(),
   discipline: z.string().min(1).optional(),
+  timeoutPrompt: z
+    .string()
+    .refine((val) => validateTemplate(val), {
+      message: "timeoutPrompt contains disallowed Handlebars expressions",
+    })
+    .optional(),
 });
 
 export const StateDefinitionSchema = z.object({

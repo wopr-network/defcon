@@ -12,6 +12,7 @@ import type {
 import type { IEventBusAdapter } from "./event-types.js";
 import { executeSpawn } from "./flow-spawner.js";
 import { evaluateGate } from "./gate-evaluator.js";
+import { getHandlebars } from "./handlebars.js";
 import { buildInvocation } from "./invocation-builder.js";
 import { findTransition, isTerminal } from "./state-machine.js";
 
@@ -129,13 +130,30 @@ export class Engine {
             emittedAt: new Date(),
           });
         }
+        const SYSTEM_DEFAULT_TIMEOUT =
+          "Your report was received. The gate is still evaluating — this is not an error. Call flow.claim to reclaim the entity, then call flow.report again with the same arguments after a short wait.";
+        let resolvedTimeoutPrompt: string | undefined;
+        if (gateResult.timedOut) {
+          const rawTemplate = gate.timeoutPrompt ?? flow.timeoutPrompt ?? SYSTEM_DEFAULT_TIMEOUT;
+          try {
+            const hbs = getHandlebars();
+            const template = hbs.compile(rawTemplate);
+            resolvedTimeoutPrompt = template({
+              entity,
+              flow,
+              gate: { name: gate.name, output: gateResult.output },
+            });
+          } catch {
+            resolvedTimeoutPrompt = SYSTEM_DEFAULT_TIMEOUT;
+          }
+        }
         return {
           gated: true,
           gateTimedOut: gateResult.timedOut,
           gateOutput: gateResult.output,
           gateName: gate.name,
           failurePrompt: gate.failurePrompt ?? undefined,
-          timeoutPrompt: gate.timeoutPrompt ?? undefined,
+          timeoutPrompt: resolvedTimeoutPrompt,
           gatesPassed,
           terminal: false,
         };

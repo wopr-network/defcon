@@ -14,6 +14,7 @@ export const flowDefinitions = sqliteTable("flow_definitions", {
   version: integer("version").default(1),
   createdBy: text("created_by"),
   discipline: text("discipline"),
+  timeoutPrompt: text("timeout_prompt"),
   createdAt: integer("created_at"),
   updatedAt: integer("updated_at"),
 });
