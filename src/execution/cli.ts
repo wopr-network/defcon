@@ -204,6 +204,7 @@ program
 
     if (opts.httpOnly && opts.mcpOnly) {
       console.error("Cannot use --http-only and --mcp-only together");
+      await stopReaper();
       sqlite.close();
       process.exit(1);
     }
