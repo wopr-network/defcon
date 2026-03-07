@@ -20,7 +20,8 @@
   },
   "files": [
     "dist",
-    "drizzle"
+    "drizzle",
+    "gates"
   ],
   "scripts": {
     "build": "tsc",

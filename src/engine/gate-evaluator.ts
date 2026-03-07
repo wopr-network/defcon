@@ -1,4 +1,7 @@
 import { execFile } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Entity, Gate, IGateRepository } from "../repositories/interfaces.js";
 import { validateGateCommand } from "./gate-command-validator.js";
 
@@ -7,10 +10,11 @@ export interface GateEvalResult {
   output: string;
 }
 
+const PROJECT_ROOT = realpathSync(resolve(fileURLToPath(import.meta.url), "../../.."));
+
 /**
  * Evaluate a gate against an entity. Records the result in gateRepo.
- * Currently supports "command" type gates only.
- * "function" and "api" types throw — implement when needed.
+ * Supports "command", "function", and "api" gate types.
  */
 export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRepository): Promise<GateEvalResult> {
   let passed = false;
@@ -33,7 +37,19 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
     passed = result.exitCode === 0;
     output = result.output;
   } else if (gate.type === "function") {
-    throw new Error(`Function gates not yet implemented: ${gate.functionRef}`);
+    try {
+      if (!gate.functionRef) {
+        const result = { passed: false, output: "Gate functionRef is not configured" };
+        await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+        return result;
+      }
+      const result = await runFunction(gate.functionRef, entity, gate);
+      passed = result.passed;
+      output = result.output;
+    } catch (err) {
+      passed = false;
+      output = err instanceof Error ? err.message : String(err);
+    }
   } else if (gate.type === "api") {
     if (!gate.apiConfig) {
       passed = false;
@@ -76,6 +92,54 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
 
   await gateRepo.record(entity.id, gate.id, passed, output);
   return { passed, output };
+}
+
+async function runFunction(
+  functionRef: string,
+  entity: Entity,
+  gate: Gate,
+): Promise<{ passed: boolean; output: string }> {
+  const lastColon = functionRef.lastIndexOf(":");
+  if (lastColon === -1) {
+    throw new Error(`Invalid functionRef "${functionRef}" — expected "path:exportName"`);
+  }
+  const modulePath = functionRef.slice(0, lastColon);
+  const exportName = functionRef.slice(lastColon + 1);
+
+  const absPath = resolve(PROJECT_ROOT, modulePath);
+  let realPath: string;
+  try {
+    realPath = realpathSync(absPath);
+  } catch {
+    throw new Error(`Gate module not found: ${modulePath}`);
+  }
+  const rel = realPath.startsWith(PROJECT_ROOT + "/") || realPath === PROJECT_ROOT
+    ? realPath.slice(PROJECT_ROOT.length)
+    : null;
+  if (rel === null) {
+    throw new Error(`Gate module path traversal rejected: ${modulePath}`);
+  }
+
+  const { pathToFileURL } = await import("node:url");
+  const moduleUrl = pathToFileURL(realPath).href;
+
+  const mod = await import(moduleUrl);
+  const fn = mod[exportName];
+  if (typeof fn !== "function") {
+    throw new Error(`Gate function "${exportName}" not found in ${modulePath}`);
+  }
+
+  const timeout = gate.timeoutMs ?? 30000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const result = await Promise.race([
+    Promise.resolve(fn(entity, gate)),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Function gate timed out after ${timeout}ms`)), timeout);
+    }),
+  ]);
+  clearTimeout(timer);
+
+  return { passed: result.passed, output: result.output ?? "" };
 }
 
 function runCommand(file: string, args: string[], timeoutMs: number): Promise<{ exitCode: number; output: string }> {
