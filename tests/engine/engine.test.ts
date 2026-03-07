@@ -646,7 +646,8 @@ describe("Engine", () => {
         const countAtStop = ticksStarted;
         await vi.advanceTimersByTimeAsync(100);
         expect(ticksStarted).toBe(countAtStop);
-        expect(countAtStop).toBeGreaterThanOrEqual(1);
+        // 30ms interval over 100ms → exactly 3 ticks (fake timers are deterministic)
+        expect(countAtStop).toBe(3);
       } finally {
         vi.useRealTimers();
       }

@@ -396,6 +396,8 @@ export class Engine {
         })
         .finally(() => {
           tickInFlight = false;
+          // Reset chain head so completed ticks don't accumulate in memory
+          currentTickPromise = Promise.resolve();
         });
     }, intervalMs);
 
