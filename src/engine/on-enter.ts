@@ -116,7 +116,7 @@ function runOnEnterCommand(
     const child = exec(command, { timeout: timeoutMs }, (error, stdout, stderr) => {
       const timedOut = error !== null && child.killed === true;
       resolve({
-        exitCode: error ? 1 : 0,
+        exitCode: error ? ((error as NodeJS.ErrnoException & { code?: number }).code ?? 1) : 0,
         stdout: stdout.trim(),
         stderr: stderr.trim(),
         timedOut,

@@ -123,6 +123,21 @@ describe("executeOnEnter", () => {
     });
   });
 
+  it("preserves actual exit code from failed command (not hardcoded 1)", async () => {
+    const entity = makeEntity();
+    const repo = makeEntityRepo();
+    const onEnter: OnEnterConfig = {
+      command: "exit 42",
+      artifacts: ["worktreePath"],
+    };
+
+    const result = await executeOnEnter(onEnter, entity, repo);
+
+    expect(result.skipped).toBe(false);
+    expect(result.error).toMatch(/42/);
+    expect(result.artifacts).toBeNull();
+  });
+
   it("records error when stdout is not valid JSON", async () => {
     const entity = makeEntity();
     const repo = makeEntityRepo();
@@ -305,5 +320,67 @@ describe("Engine onEnter integration", () => {
 
     const updatedEntity = await entityRepo.get(entity.id);
     expect(updatedEntity?.artifacts).toHaveProperty("onEnter_error");
+  });
+
+  it("transitionLogRepo.record is called even when onEnter fails", async () => {
+    const transitionRecordSpy = vi.fn(async (log: unknown) => ({ id: crypto.randomUUID(), ...(log as object) }));
+    const spyTransitionRepo: ITransitionLogRepository = {
+      record: transitionRecordSpy,
+      historyFor: async () => [],
+    };
+
+    const sqlite = new Database(":memory:");
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    const db2 = drizzle(sqlite, { schema });
+    migrate(db2, { migrationsFolder: "./drizzle" });
+
+    const entityRepo2 = new DrizzleEntityRepository(db2 as Parameters<typeof DrizzleEntityRepository>[0]);
+    const flowRepo2 = new DrizzleFlowRepository(db2 as Parameters<typeof DrizzleFlowRepository>[0]);
+    const invocationRepo2 = new DrizzleInvocationRepository(db2 as Parameters<typeof DrizzleInvocationRepository>[0]);
+    const gateRepo2 = new DrizzleGateRepository(db2 as Parameters<typeof DrizzleGateRepository>[0]);
+
+    const engine2 = new Engine({
+      entityRepo: entityRepo2,
+      flowRepo: flowRepo2,
+      invocationRepo: invocationRepo2,
+      gateRepo: gateRepo2,
+      transitionLogRepo: spyTransitionRepo,
+      adapters: new Map(),
+      eventEmitter: { emit: async () => {} },
+    });
+
+    const flow2 = await flowRepo2.create({ name: "test-flow4b", initialState: "triage" });
+    await flowRepo2.addState(flow2.id, { name: "triage", agentRole: "triager", promptTemplate: "triage" });
+    await flowRepo2.addState(flow2.id, {
+      name: "coding",
+      agentRole: "coder",
+      promptTemplate: "code",
+      onEnter: { command: "false", artifacts: ["worktreePath"] },
+    });
+    await flowRepo2.addTransition(flow2.id, { fromState: "triage", toState: "coding", trigger: "approved" });
+
+    const entity = await engine2.createEntity("test-flow4b");
+    const result = await engine2.processSignal(entity.id, "approved");
+
+    expect(result.onEnterFailed).toBe(true);
+    expect(transitionRecordSpy).toHaveBeenCalledOnce();
+    expect(transitionRecordSpy).toHaveBeenCalledWith(expect.objectContaining({
+      entityId: entity.id,
+      fromState: "triage",
+      toState: "coding",
+    }));
+  });
+
+  it("createEntity throws when onEnter fails on initial state", async () => {
+    const flow = await flowRepo.create({ name: "test-flow5", initialState: "setup" });
+    await flowRepo.addState(flow.id, {
+      name: "setup",
+      agentRole: "setupper",
+      promptTemplate: "setup",
+      onEnter: { command: "false", artifacts: ["worktreePath"] },
+    });
+
+    await expect(engine.createEntity("test-flow5")).rejects.toThrow("onEnter failed");
   });
 });

@@ -196,6 +196,14 @@ export class Engine {
           error: onEnterResult.error,
           emittedAt: new Date(),
         });
+        await this.transitionLogRepo.record({
+          entityId,
+          fromState: entity.state,
+          toState: transition.toState,
+          trigger: signal,
+          invocationId: triggeringInvocationId ?? null,
+          timestamp: new Date(),
+        });
         return {
           newState: transition.toState,
           gatesPassed,
@@ -315,7 +323,7 @@ export class Engine {
           error: onEnterResult.error,
           emittedAt: new Date(),
         });
-        return entity;
+        throw new Error(`onEnter failed for entity ${entity.id}: ${onEnterResult.error}`);
       }
       if (onEnterResult.artifacts) {
         await this.eventEmitter.emit({
