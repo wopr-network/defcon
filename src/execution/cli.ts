@@ -35,7 +35,7 @@ import {
 } from "../repositories/drizzle/schema.js";
 import { DrizzleTransitionLogRepository } from "../repositories/drizzle/transition-log.repo.js";
 import { ActiveRunner } from "./active-runner.js";
-import type { McpServerDeps } from "./mcp-server.js";
+import type { McpServerDeps, McpServerOpts } from "./mcp-server.js";
 import { createMcpServer, startStdioServer } from "./mcp-server.js";
 
 const DB_DEFAULT = process.env.AGENTIC_DB_PATH ?? "./agentic-flow.db";
@@ -119,6 +119,7 @@ program
   .description("Start MCP server")
   .option("--transport <type>", "Transport: stdio or sse", "stdio")
   .option("--port <number>", "Port for SSE transport", "3000")
+  .option("--host <addr>", "Bind address for SSE transport", "127.0.0.1")
   .option("--db <path>", "Database path", DB_DEFAULT)
   .option("--reaper-interval <ms>", "Reaper poll interval in milliseconds", REAPER_INTERVAL_DEFAULT)
   .option("--claim-ttl <ms>", "Claim TTL in milliseconds", CLAIM_TTL_DEFAULT)
@@ -172,6 +173,8 @@ program
     }
     const stopReaper = engine.startReaper(reaperInterval, claimTtl);
 
+    const adminToken = process.env.DEFCON_ADMIN_TOKEN || undefined;
+
     if (opts.transport === "sse") {
       const { SSEServerTransport } = await import("@modelcontextprotocol/sdk/server/sse.js");
       const http = await import("node:http");
@@ -185,7 +188,11 @@ program
           const transport = new SSEServerTransport("/messages", res);
           transports.set(transport.sessionId, transport);
           res.on("close", () => transports.delete(transport.sessionId));
-          const server = createMcpServer(deps);
+          const mcpOpts: McpServerOpts = {
+            adminToken,
+            callerToken: extractBearerToken(req.headers.authorization),
+          };
+          const server = createMcpServer(deps, mcpOpts);
           await server.connect(transport);
         } else if (req.url?.startsWith("/messages") && req.method === "POST") {
           const url = new URL(req.url, `http://localhost:${port}`);
@@ -201,9 +208,13 @@ program
         }
       });
 
-      httpServer.listen(port, () => {
-        console.log(`MCP SSE server listening on port ${port}`);
+      const host = opts.host as string;
+      httpServer.listen(port, host, () => {
+        console.log(`MCP SSE server listening on ${host}:${port}`);
       });
+      if (!adminToken) {
+        console.warn("WARNING: DEFCON_ADMIN_TOKEN not set — admin tools are unauthenticated");
+      }
 
       const shutdown = () => {
         stopReaper().then(() => {
@@ -225,7 +236,8 @@ program
       };
       process.on("SIGINT", cleanup);
       process.on("SIGTERM", cleanup);
-      await startStdioServer(deps);
+      const mcpOpts: McpServerOpts = { adminToken };
+      await startStdioServer(deps, mcpOpts);
     }
   });
 
@@ -509,6 +521,12 @@ program
     console.log(`Ingested ${created} entities into flow "${opts.flow}"`);
     sqlite.close();
   });
+
+function extractBearerToken(header: string | undefined): string | undefined {
+  if (!header) return undefined;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1];
+}
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

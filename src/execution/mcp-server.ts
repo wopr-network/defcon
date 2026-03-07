@@ -1,4 +1,5 @@
 // MCP server — passive mode (flow.claim, flow.report, query.*)
+import { timingSafeEqual } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -35,6 +36,13 @@ export interface McpServerDeps {
   eventRepo: IEventRepository;
   integrationRepo: IIntegrationRepository;
   engine?: Engine;
+}
+
+export interface McpServerOpts {
+  /** DEFCON_ADMIN_TOKEN — if set, admin.* tools require this token */
+  adminToken?: string;
+  /** Token provided by the caller (from HTTP Authorization header, or undefined for stdio) */
+  callerToken?: string;
 }
 
 const TOOL_DEFINITIONS = [
@@ -317,7 +325,7 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
-export function createMcpServer(deps: McpServerDeps): Server {
+export function createMcpServer(deps: McpServerDeps, opts?: McpServerOpts): Server {
   const server = new Server({ name: "agentic-flow", version: "0.1.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -327,14 +335,30 @@ export function createMcpServer(deps: McpServerDeps): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const safeArgs = (args ?? {}) as Record<string, unknown>;
-    return callToolHandler(deps, name, safeArgs);
+    return callToolHandler(deps, name, safeArgs, opts);
   });
 
   return server;
 }
 
-export async function callToolHandler(deps: McpServerDeps, name: string, safeArgs: Record<string, unknown>) {
+export async function callToolHandler(
+  deps: McpServerDeps,
+  name: string,
+  safeArgs: Record<string, unknown>,
+  opts?: McpServerOpts,
+) {
   try {
+    // Auth gate: admin.* tools require a valid token when one is configured
+    if (name.startsWith("admin.")) {
+      const configuredToken = opts?.adminToken || undefined; // treat "" as unset
+      if (configuredToken) {
+        const callerToken = opts?.callerToken;
+        if (!callerToken || !constantTimeEqual(configuredToken, callerToken)) {
+          return errorResult("Unauthorized: valid DEFCON_ADMIN_TOKEN required for admin tools");
+        }
+      }
+    }
+
     switch (name) {
       case "flow.claim":
         return await handleFlowClaim(deps, safeArgs);
@@ -394,6 +418,14 @@ function errorResult(message: string) {
     content: [{ type: "text" as const, text: message }],
     isError: true,
   };
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 // ─── Tool Handlers ───
@@ -617,8 +649,8 @@ async function handleQueryFlow(deps: McpServerDeps, args: Record<string, unknown
 }
 
 /** Start the MCP server on stdio transport. */
-export async function startStdioServer(deps: McpServerDeps): Promise<void> {
-  const server = createMcpServer(deps);
+export async function startStdioServer(deps: McpServerDeps, opts?: McpServerOpts): Promise<void> {
+  const server = createMcpServer(deps, opts);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
