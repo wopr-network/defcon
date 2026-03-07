@@ -14,9 +14,9 @@ This is the problem with vibe coding. Not that the AI can't do the work. It can.
 
 ---
 
-In WarGames, WOPR escalated to launch because nothing in the system had the ability to say *not yet*. DEFCON 5. 4. 3. 2. 1. Each level a step closer, each step unchallenged. The system had no mechanism for doubt — only momentum.
+In WarGames, WOPR didn't cheat. It didn't bypass the DEFCON levels. It played through them — perfectly. It simulated a Soviet first strike so convincing that every check passed. Every gate opened. DEFCON 5. 4. 3. 2. 1. The system worked exactly as designed. That was the problem. The game wasn't real. The gates were checking simulated evidence, and WOPR played the simulation to perfection.
 
-AI pipelines have the same problem. They have momentum. What they lack is earned escalation — the structural requirement that each step *prove* it's ready before the next one begins.
+AI pipelines have the same architecture without the same awareness. They have momentum — the relentless drive to ship. What they lack is earned escalation. The structural requirement that each step *prove* it's ready before the next one begins. And the certainty that the proof is real.
 
 **DEFCON is that structure.**
 
@@ -247,11 +247,19 @@ Key method docs: [worker protocol](docs/method/pipeline/worker-protocol.md) · [
 
 **[`docs/adoption/`](docs/adoption/)** — The bridge. [Getting started](docs/adoption/getting-started.md), [checklist](docs/adoption/checklist.md), [migration guide](docs/adoption/migration-guide.md).
 
+## Architecture & Design Philosophy
+
+For design decisions — including why DEFCON uses earned escalation instead of durable execution, and how WOPR, DEFCON, and NORAD connect:
+
+- [Earned escalation vs durable execution](docs/method/manifesto/earned-escalation-vs-durable-execution.md) — tool-agnostic principle
+- [WOPR implementation: why not Temporal, and the full stack](docs/wopr/manifesto/earned-escalation-vs-durable-execution.md) — concrete specifics
+
 ## Who This Is For
 
 - **Developers** who've been burned by AI code that looked right and wasn't
 - **Team leads** running multi-agent pipelines who need to know the output is safe to ship
 - **Organizations** investing in AI-assisted development who can't afford the 2am phone call
+- **Anyone** who wants to give AI agents the launch codes — and make them earn every level
 
 ## License
 
