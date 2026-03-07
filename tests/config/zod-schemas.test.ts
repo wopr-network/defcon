@@ -117,7 +117,7 @@ describe("GateDefinitionSchema", () => {
     const result = GateDefinitionSchema.safeParse({
       name: "lint-check",
       type: "command",
-      command: "pnpm lint",
+      command: "gates/blocking-graph.ts",
     });
     expect(result.success).toBe(true);
   });
@@ -160,7 +160,7 @@ describe("GateDefinitionSchema", () => {
     const result = GateDefinitionSchema.parse({
       name: "lint-check",
       type: "command",
-      command: "pnpm lint",
+      command: "gates/blocking-graph.ts",
     });
     expect(result.timeoutMs).toBe(30000);
   });
@@ -254,7 +254,7 @@ describe("SeedFileSchema", () => {
       { name: "open", flowName: "pr-review" },
       { name: "reviewing", flowName: "pr-review" },
     ],
-    gates: [{ name: "lint-pass", type: "command" as const, command: "pnpm lint" }],
+    gates: [{ name: "lint-pass", type: "command" as const, command: "gates/blocking-graph.ts" }],
     transitions: [
       {
         flowName: "pr-review",
@@ -432,8 +432,8 @@ describe("SeedFileSchema", () => {
       flows: [{ name: "pr-review", initialState: "open" }],
       states: [{ name: "open", flowName: "pr-review" }],
       gates: [
-        { name: "lint-pass", type: "command" as const, command: "pnpm lint" },
-        { name: "lint-pass", type: "command" as const, command: "pnpm lint" }, // duplicate
+        { name: "lint-pass", type: "command" as const, command: "gates/blocking-graph.ts" },
+        { name: "lint-pass", type: "command" as const, command: "gates/blocking-graph.ts" }, // duplicate
       ],
       transitions: [
         { flowName: "pr-review", fromState: "open", toState: "open", trigger: "loop" },
