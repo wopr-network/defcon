@@ -14,7 +14,12 @@ RESPONSE=$(curl -s -f -X POST "https://api.linear.app/graphql" \
   echo "Failed to query Linear API: $RESPONSE"
   exit 1
 }
-COMMENTS=$(echo "$RESPONSE" | grep -o '"body":"[^"]*"' | sed 's/"body":"//;s/"$//' || true)
+if echo "$RESPONSE" | jq -e '.errors' > /dev/null 2>&1; then
+  echo "GraphQL error from Linear API: $(echo "$RESPONSE" | jq -r '.errors[0].message // "unknown error"')"
+  exit 1
+fi
+
+COMMENTS=$(echo "$RESPONSE" | jq -r '.data.issue.comments.nodes[].body // empty')
 
 if echo "$COMMENTS" | grep -q "Implementation Spec"; then
   echo "Spec comment found on issue $LINEAR_ID"

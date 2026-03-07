@@ -11,7 +11,6 @@ import { DrizzleGateRepository } from "../../src/repositories/drizzle/gate.repo.
 
 function setupDb() {
   const sqlite = new Database(":memory:");
-  sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: resolve(__dirname, "../../drizzle") });
