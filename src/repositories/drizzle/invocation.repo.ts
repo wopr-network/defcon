@@ -152,6 +152,28 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     return rows.map((r) => toInvocation(r.inv));
   }
 
+  async findUnclaimedWithAffinity(flowId: string, role: string, workerId: string): Promise<Invocation[]> {
+    const now = Date.now();
+    const rows = this.db
+      .select({ inv: invocations })
+      .from(invocations)
+      .innerJoin(entities, eq(invocations.entityId, entities.id))
+      .where(
+        and(
+          eq(entities.flowId, flowId),
+          eq(invocations.agentRole, role),
+          isNull(invocations.claimedBy),
+          isNull(invocations.completedAt),
+          isNull(invocations.failedAt),
+          eq(entities.affinityWorkerId, workerId),
+          eq(entities.affinityRole, role),
+          sql`${entities.affinityExpiresAt} > ${now}`,
+        ),
+      )
+      .all();
+    return rows.map((r) => toInvocation(r.inv));
+  }
+
   async findByFlow(flowId: string): Promise<Invocation[]> {
     const rows = this.db
       .select({ inv: invocations })

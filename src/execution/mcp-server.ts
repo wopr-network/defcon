@@ -64,6 +64,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         role: { type: "string", description: "Agent role to claim work for" },
         flow: { type: "string", description: "Optional flow name to filter by" },
+        worker_id: { type: "string", description: "Optional stable worker identifier for affinity routing" },
       },
       required: ["role"],
     },
@@ -96,6 +97,7 @@ const TOOL_DEFINITIONS = [
           description: "Completion signal (matches transition trigger)",
         },
         artifacts: { type: "object", description: "Optional artifacts to attach" },
+        worker_id: { type: "string", description: "Optional stable worker identifier for affinity routing" },
       },
       required: ["entity_id", "signal"],
     },
@@ -171,6 +173,7 @@ const TOOL_DEFINITIONS = [
         entitySchema: { type: "object", description: "JSON schema for entity data" },
         maxConcurrent: { type: "number", description: "Max concurrent entities (0=unlimited)" },
         maxConcurrentPerRepo: { type: "number", description: "Max concurrent per repo (0=unlimited)" },
+        affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },
         createdBy: { type: "string", description: "Creator identifier" },
         states: {
           type: "array",
@@ -191,6 +194,7 @@ const TOOL_DEFINITIONS = [
         description: { type: "string" },
         maxConcurrent: { type: "number" },
         maxConcurrentPerRepo: { type: "number" },
+        affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },
         initialState: { type: "string" },
       },
       required: ["flow_name"],
@@ -427,20 +431,40 @@ function constantTimeEqual(a: string, b: string): boolean {
 async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowClaimSchema, args);
   if (!v.ok) return v.result;
-  const { role, flow: flowName } = v.data;
+  const { role, flow: flowName, worker_id: workerId } = v.data;
 
   let candidates: import("../repositories/interfaces.js").Invocation[] = [];
+  let affinityCandidatesUsed = false;
+  let flowForFallback: Awaited<ReturnType<typeof deps.flows.getByName>> | null = null;
 
   if (flowName) {
     const flow = await deps.flows.getByName(flowName);
     if (!flow) return errorResult(`Flow not found: ${flowName}`);
-    candidates = await deps.invocations.findUnclaimed(flow.id, role);
+    flowForFallback = flow;
+    // Try affinity-matched candidates first if workerId is provided
+    if (workerId) {
+      candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
+      if (candidates.length > 0) affinityCandidatesUsed = true;
+    }
+    if (candidates.length === 0) {
+      candidates = await deps.invocations.findUnclaimed(flow.id, role);
+    }
   } else {
     // No flow specified — search all flows for a claimable entity with this role
     const allFlows = await deps.flows.list();
     for (const flow of allFlows) {
-      const unclaimed = await deps.invocations.findUnclaimed(flow.id, role);
-      candidates.push(...unclaimed);
+      candidates = [];
+      if (workerId) {
+        candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
+        if (candidates.length > 0) {
+          affinityCandidatesUsed = true;
+          flowForFallback = flow;
+        }
+      }
+      if (candidates.length === 0) {
+        const unclaimed = await deps.invocations.findUnclaimed(flow.id, role);
+        candidates.push(...unclaimed);
+      }
       if (candidates.length > 0) break;
     }
   }
@@ -457,12 +481,55 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
       continue;
     }
     if (claimed) {
+      // Record affinity for the claiming worker
+      if (workerId) {
+        const entity = await deps.entities.get(claimed.entityId);
+        if (entity) {
+          const flow = await deps.flows.get(entity.flowId);
+          const windowMs = flow?.affinityWindowMs ?? 300000;
+          await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+        }
+      }
       return jsonResult({
         entity_id: claimed.entityId,
         invocation_id: claimed.id,
         prompt: claimed.prompt,
         context: claimed.context,
       });
+    }
+  }
+
+  // All affinity candidates lost the claim race — fall back to open pool
+  if (affinityCandidatesUsed) {
+    // When no flowName was specified, check ALL flows' open pools, not just the one that had affinity matches
+    const fallbackFlows = flowName ? (flowForFallback ? [flowForFallback] : []) : await deps.flows.list();
+    for (const fallbackFlow of fallbackFlows) {
+      const openPool = await deps.invocations.findUnclaimed(fallbackFlow.id, role);
+      for (const invocation of openPool) {
+        let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
+        try {
+          claimed = await deps.invocations.claim(invocation.id, role);
+        } catch (err) {
+          console.error(`Failed to claim invocation ${invocation.id}:`, err);
+          continue;
+        }
+        if (claimed) {
+          if (workerId) {
+            const entity = await deps.entities.get(claimed.entityId);
+            if (entity) {
+              const flow = await deps.flows.get(entity.flowId);
+              const windowMs = flow?.affinityWindowMs ?? 300000;
+              await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+            }
+          }
+          return jsonResult({
+            entity_id: claimed.entityId,
+            invocation_id: claimed.id,
+            prompt: claimed.prompt,
+            context: claimed.context,
+          });
+        }
+      }
     }
   }
 
@@ -496,7 +563,7 @@ async function handleFlowGetPrompt(deps: McpServerDeps, args: Record<string, unk
 async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowReportSchema, args);
   if (!v.ok) return v.result;
-  const { entity_id: entityId, signal, artifacts } = v.data;
+  const { entity_id: entityId, signal, artifacts, worker_id: workerId } = v.data;
 
   const invocationList = await deps.invocations.findByEntity(entityId);
   const activeInvocation = invocationList.find(
@@ -531,6 +598,25 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
       activeInvocation.agentRole ?? undefined,
     );
     return errorResult(message);
+  }
+
+  // Set affinity on completion for passive-mode invocations, after processSignal succeeds
+  if (workerId && activeInvocation.mode === "passive" && activeInvocation.agentRole) {
+    try {
+      const entity = await deps.entities.get(entityId);
+      if (entity) {
+        const flow = await deps.flows.get(entity.flowId);
+        const windowMs = flow?.affinityWindowMs ?? 300000;
+        await deps.entities.setAffinity(
+          entityId,
+          workerId,
+          activeInvocation.agentRole,
+          new Date(Date.now() + windowMs),
+        );
+      }
+    } catch (err) {
+      console.error(`Failed to set affinity for entity ${entityId} worker ${workerId}:`, err);
+    }
   }
 
   // Gate blocked — create a replacement unclaimed invocation so the entity

@@ -280,7 +280,7 @@ export class Engine {
     return entity;
   }
 
-  async claimWork(role: string, flowName?: string): Promise<ClaimWorkResult | null> {
+  async claimWork(role: string, flowName?: string, workerId?: string): Promise<ClaimWorkResult | null> {
     let flows: Flow[];
     if (flowName) {
       const flow = await this.flowRepo.getByName(flowName);
@@ -290,6 +290,60 @@ export class Engine {
     }
 
     for (const flow of flows) {
+      const affinityWindow = flow.affinityWindowMs ?? 300000;
+
+      // Try affinity match first if workerId provided
+      if (workerId) {
+        const affinityUnclaimed = await this.invocationRepo.findUnclaimedWithAffinity(flow.id, role, workerId);
+        for (const pending of affinityUnclaimed) {
+          const claimed = await this.entityRepo.claimById(pending.entityId, `agent:${role}`);
+          if (claimed) {
+            const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
+            if (!claimedInvocation) {
+              try {
+                await this.entityRepo.release(claimed.id, `agent:${role}`);
+              } catch (err) {
+                console.error(`release() failed for entity ${claimed.id}:`, err);
+              }
+              continue;
+            }
+
+            try {
+              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            } catch (err) {
+              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
+            }
+
+            const state = flow.states.find((s) => s.name === pending.stage);
+            let build: { prompt: string; context: Record<string, unknown> | null };
+            if (state) {
+              const [invocations, gateResults] = await Promise.all([
+                this.invocationRepo.findByEntity(claimed.id),
+                this.gateRepo.resultsFor(claimed.id),
+              ]);
+              const enriched: EnrichedEntity = { ...claimed, invocations, gateResults };
+              build = await buildInvocation(state, enriched, this.adapters);
+            } else {
+              build = { prompt: pending.prompt, context: null };
+            }
+
+            await this.eventEmitter.emit({
+              type: "entity.claimed",
+              entityId: claimed.id,
+              flowId: flow.id,
+              agentId: `agent:${role}`,
+              emittedAt: new Date(),
+            });
+            return {
+              entityId: claimed.id,
+              invocationId: claimedInvocation.id,
+              prompt: build.prompt,
+              context: build.context,
+            };
+          }
+        }
+      }
+
       // Prefer claiming an existing unclaimed invocation created by processSignal
       // to avoid creating a duplicate. Fall back to creating a new one if none exist.
       const unclaimed = await this.invocationRepo.findUnclaimed(flow.id, role);
@@ -305,6 +359,14 @@ export class Engine {
               console.error(`release() failed for entity ${claimed.id}:`, err);
             }
             continue;
+          }
+
+          if (workerId) {
+            try {
+              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            } catch (err) {
+              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
+            }
           }
 
           const state = flow.states.find((s) => s.name === pending.stage);
@@ -341,6 +403,14 @@ export class Engine {
       for (const state of claimableStates) {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
         if (claimed) {
+          if (workerId) {
+            try {
+              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            } catch (err) {
+              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
+            }
+          }
+
           const [invocations, gateResults] = await Promise.all([
             this.invocationRepo.findByEntity(claimed.id),
             this.gateRepo.resultsFor(claimed.id),
@@ -419,6 +489,7 @@ export class Engine {
         });
       }
       await this.entityRepo.reapExpired(entityTtlMs);
+      await this.entityRepo.clearExpiredAffinity();
     };
 
     let currentTickPromise: Promise<void> = Promise.resolve();

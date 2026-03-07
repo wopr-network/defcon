@@ -21,6 +21,9 @@ export interface Entity {
   flowVersion: number;
   createdAt: Date;
   updatedAt: Date;
+  affinityWorkerId: string | null;
+  affinityRole: string | null;
+  affinityExpiresAt: Date | null;
 }
 
 /** A single agent invocation tied to an entity */
@@ -121,6 +124,7 @@ export interface Flow {
   initialState: string;
   maxConcurrent: number;
   maxConcurrentPerRepo: number;
+  affinityWindowMs: number;
   version: number;
   createdBy: string | null;
   createdAt: Date | null;
@@ -148,6 +152,7 @@ export interface CreateFlowInput {
   initialState: string;
   maxConcurrent?: number;
   maxConcurrentPerRepo?: number;
+  affinityWindowMs?: number;
   createdBy?: string;
 }
 
@@ -204,11 +209,20 @@ export interface IEntityRepository {
   /** Atomically claim one unclaimed entity in the given flow+state for the specified agent. Returns null if none available. Uses compare-and-swap (UPDATE WHERE claimedBy IS NULL). */
   claim(flowId: string, state: string, agentId: string): Promise<Entity | null>;
 
+  /** Atomically claim a specific entity by ID for the specified agent. Returns null if already claimed or not found. Uses compare-and-swap (UPDATE WHERE claimedBy IS NULL AND id = entityId). */
+  claimById(entityId: string, agentId: string): Promise<Entity | null>;
+
   /** Release a claimed entity, clearing claimedBy and claimedAt. */
   release(entityId: string, agentId: string): Promise<void>;
 
   /** Find entities whose claim has expired beyond ttlMs and release them. Returns the IDs of released entities. */
   reapExpired(ttlMs: number): Promise<string[]>;
+
+  /** Set affinity metadata on an entity, recording the last worker that touched it. */
+  setAffinity(entityId: string, workerId: string, role: string, expiresAt: Date): Promise<void>;
+
+  /** Clear expired affinity records. Returns the IDs of entities whose affinity was cleared. */
+  clearExpiredAffinity(): Promise<string[]>;
 
   /** Atomically append a spawned child entry to the parent entity's artifacts.spawnedChildren array.
    *  Reads the current array and writes back in a single transaction to prevent TOCTOU races. */
@@ -293,6 +307,9 @@ export interface IInvocationRepository {
 
   /** Find unclaimed invocations for a given flow and agent role. */
   findUnclaimed(flowId: string, role: string): Promise<Invocation[]>;
+
+  /** Find unclaimed invocations where the entity has unexpired affinity for the given worker and role. */
+  findUnclaimedWithAffinity(flowId: string, role: string, workerId: string): Promise<Invocation[]>;
 
   /** Find all invocations for a given flow (across all entities). */
   findByFlow(flowId: string): Promise<Invocation[]>;

@@ -21,6 +21,7 @@ function makeEntity(overrides: Partial<Entity> = {}): Entity {
     id: "ent-1", flowId: "flow-1", state: "open",
     refs: null, artifacts: null, claimedBy: null, claimedAt: null,
     flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    affinityWorkerId: null, affinityRole: null, affinityExpiresAt: null,
     ...overrides,
   };
 }
@@ -37,7 +38,7 @@ function makeState(overrides: Partial<State> = {}): State {
 function makeFlow(overrides: Partial<Flow> = {}): Flow {
   return {
     id: "flow-1", name: "test-flow", description: null, entitySchema: null,
-    initialState: "open", maxConcurrent: 0, maxConcurrentPerRepo: 0,
+    initialState: "open", maxConcurrent: 0, maxConcurrentPerRepo: 0, affinityWindowMs: 300000,
     version: 1, createdBy: null, createdAt: null, updatedAt: null,
     states: [
       makeState({ name: "open", agentRole: "planner", promptTemplate: "Plan" }),
@@ -75,6 +76,9 @@ function makeMockRepos() {
     claim: vi.fn().mockResolvedValue(null),
     release: vi.fn().mockResolvedValue(undefined),
     reapExpired: vi.fn().mockResolvedValue([]),
+    setAffinity: vi.fn().mockResolvedValue(undefined),
+    clearExpiredAffinity: vi.fn().mockResolvedValue([]),
+    appendSpawnedChild: vi.fn().mockResolvedValue(undefined),
   };
   const flowRepo: IFlowRepository = {
     create: vi.fn(),
@@ -102,6 +106,7 @@ function makeMockRepos() {
     fail: vi.fn(),
     findByEntity: vi.fn().mockResolvedValue([]),
     findUnclaimed: vi.fn().mockResolvedValue([]),
+    findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]),
     findByFlow: vi.fn().mockResolvedValue([]),
     reapExpired: vi.fn().mockResolvedValue([]),
     countActiveByFlow: vi.fn().mockResolvedValue(0),
