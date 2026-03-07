@@ -357,6 +357,12 @@ export interface IGateRepository {
 
   /** Get all gate results for a given entity. */
   resultsFor(entityId: string): Promise<GateResult[]>;
+
+  /** Update mutable fields on a gate definition. */
+  update(
+    id: string,
+    changes: Partial<Pick<Gate, "command" | "functionRef" | "apiConfig" | "timeoutMs">>,
+  ): Promise<Gate>;
 }
 
 /** An integration config entry */

@@ -84,6 +84,16 @@ export class DrizzleGateRepository implements IGateRepository {
     return toGateResult(row);
   }
 
+  async update(
+    id: string,
+    changes: Partial<Pick<Gate, "command" | "functionRef" | "apiConfig" | "timeoutMs">>,
+  ): Promise<Gate> {
+    this.db.update(gateDefinitions).set(changes).where(eq(gateDefinitions.id, id)).run();
+    const row = this.db.select().from(gateDefinitions).where(eq(gateDefinitions.id, id)).get();
+    if (!row) throw new Error(`Gate ${id} not found after update`);
+    return toGate(row);
+  }
+
   async resultsFor(entityId: string): Promise<GateResult[]> {
     const rows = this.db
       .select()
