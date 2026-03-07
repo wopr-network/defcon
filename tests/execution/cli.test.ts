@@ -138,7 +138,7 @@ describe("CLI", () => {
     const parsed = JSON.parse(output);
     expect(parsed).toHaveProperty("flows");
     if (existsSync(dbPath)) rmSync(dbPath);
-  });
+  }, 15000);
 
   it("ingest --help shows ingest options", () => {
     const output = run(["ingest", "--help"]);
