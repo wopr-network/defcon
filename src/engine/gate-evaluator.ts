@@ -4,6 +4,7 @@ import { resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Entity, Gate, IGateRepository } from "../repositories/interfaces.js";
 import { validateGateCommand } from "./gate-command-validator.js";
+import { checkSsrf } from "./ssrf-guard.js";
 
 export interface GateEvalResult {
   passed: boolean;
@@ -108,12 +109,20 @@ export async function evaluateGate(
         await gateRepo.record(entity.id, gate.id, passed, output);
         return { passed, timedOut: false, output };
       }
+      // SSRF guard: resolve hostname and check against blocklist
+      const ssrfResult = await checkSsrf(url, process.env.DEFCON_GATE_ALLOWLIST);
+      if (!ssrfResult.allowed) {
+        passed = false;
+        output = ssrfResult.reason ?? "SSRF_BLOCKED";
+        await gateRepo.record(entity.id, gate.id, passed, output);
+        return { passed, timedOut: false, output };
+      }
       const method = (gate.apiConfig.method as string) ?? "GET";
       const expectStatus = (gate.apiConfig.expectStatus as number) ?? 200;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
       try {
-        const res = await fetch(url, { method, signal: controller.signal });
+        const res = await fetch(url, { method, signal: controller.signal, redirect: "manual" });
         passed = res.status === expectStatus;
         output = `HTTP ${res.status}`;
       } catch (err) {
