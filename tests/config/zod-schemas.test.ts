@@ -460,8 +460,13 @@ describe("SeedFileSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const messages = result.error.issues.map((i) => i.message);
-      // Should error on fromState or toState for empty-flow
-      expect(messages.some((m) => m.includes("start") || m.includes("done") || m.includes("empty-flow"))).toBe(true);
+      // Should error on fromState and toState for empty-flow with exact message patterns
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('fromState "start" not defined in flow "empty-flow"'),
+          expect.stringContaining('toState "done" not defined in flow "empty-flow"'),
+        ]),
+      );
     }
   });
 
