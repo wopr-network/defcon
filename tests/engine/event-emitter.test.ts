@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { EngineEvent, IEventBusAdapter } from "../../src/adapters/interfaces.js";
+import type { EngineEvent, IEventBusAdapter } from "../../src/engine/event-types.js";
 import { EventEmitter } from "../../src/engine/event-emitter.js";
 
 function makeEvent(): EngineEvent {

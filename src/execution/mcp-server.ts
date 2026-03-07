@@ -9,7 +9,6 @@ import type {
   IEventRepository,
   IFlowRepository,
   IGateRepository,
-  IIntegrationRepository,
   IInvocationRepository,
   ITransitionLogRepository,
 } from "../repositories/interfaces.js";
@@ -20,7 +19,6 @@ import {
   AdminFlowUpdateSchema,
   AdminGateAttachSchema,
   AdminGateCreateSchema,
-  AdminIntegrationSetSchema,
   AdminStateCreateSchema,
   AdminStateUpdateSchema,
   AdminTransitionCreateSchema,
@@ -44,7 +42,6 @@ export interface McpServerDeps {
   gates: IGateRepository;
   transitions: ITransitionLogRepository;
   eventRepo: IEventRepository;
-  integrationRepo: IIntegrationRepository;
   engine?: Engine;
 }
 
@@ -322,19 +319,6 @@ const TOOL_DEFINITIONS = [
       required: ["flow_name", "version"],
     },
   },
-  {
-    name: "admin.integration.set",
-    description: "Set or update an integration adapter for a capability.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        capability: { type: "string", description: "e.g. issue-tracker, code-host" },
-        adapter: { type: "string", description: "e.g. linear, github" },
-        config: { type: "object", description: "Adapter-specific configuration" },
-      },
-      required: ["capability", "adapter"],
-    },
-  },
 ];
 
 export function createMcpServer(deps: McpServerDeps, opts?: McpServerOpts): Server {
@@ -408,8 +392,6 @@ export async function callToolHandler(
         return await handleAdminFlowSnapshot(deps, safeArgs);
       case "admin.flow.restore":
         return await handleAdminFlowRestore(deps, safeArgs);
-      case "admin.integration.set":
-        return await handleAdminIntegrationSet(deps, safeArgs);
       default:
         return errorResult(`Unknown tool: ${name}`);
     }
@@ -849,11 +831,3 @@ async function handleAdminFlowRestore(deps: McpServerDeps, args: Record<string, 
   return jsonResult({ restored: true, version: v.data.version });
 }
 
-async function handleAdminIntegrationSet(deps: McpServerDeps, args: Record<string, unknown>) {
-  const v = validateInput(AdminIntegrationSetSchema, args);
-  if (!v.ok) return v.result;
-  const { capability, adapter, config } = v.data;
-  const result = await deps.integrationRepo.set(capability, adapter, config);
-  emitDefinitionChanged(deps.eventRepo, null, "admin.integration.set", { capability, adapter });
-  return jsonResult(result);
-}

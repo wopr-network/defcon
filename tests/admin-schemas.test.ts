@@ -4,7 +4,6 @@ import {
   AdminFlowUpdateSchema,
   AdminStateCreateSchema,
   AdminGateCreateSchema,
-  AdminIntegrationSetSchema,
   AdminFlowRestoreSchema,
 } from "../src/execution/admin-schemas.js";
 
@@ -71,15 +70,6 @@ describe("admin-schemas", () => {
       name: "api-check",
       type: "api",
       apiConfig: { url: "https://example.com/check" },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("AdminIntegrationSetSchema accepts valid input", () => {
-    const result = AdminIntegrationSetSchema.safeParse({
-      capability: "issue-tracker",
-      adapter: "linear",
-      config: { apiKey: "xxx" },
     });
     expect(result.success).toBe(true);
   });

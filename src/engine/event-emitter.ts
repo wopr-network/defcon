@@ -1,4 +1,4 @@
-import type { EngineEvent, IEventBusAdapter } from "../adapters/interfaces.js";
+import type { EngineEvent, IEventBusAdapter } from "./event-types.js";
 
 export class EventEmitter implements IEventBusAdapter {
   private adapters: IEventBusAdapter[] = [];

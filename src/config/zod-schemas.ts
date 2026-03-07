@@ -87,12 +87,6 @@ export const TransitionRuleSchema = z.object({
     .optional(),
 });
 
-export const IntegrationConfigSchema = z.object({
-  capability: z.string().min(1),
-  adapter: z.string().min(1),
-  config: z.record(z.string(), z.unknown()).optional(),
-});
-
 // ─── Seed File Schema (with cross-reference validation) ───
 
 export const SeedFileSchema = z
@@ -101,7 +95,6 @@ export const SeedFileSchema = z
     states: z.array(StateDefinitionSchema).min(1),
     gates: z.array(GateDefinitionSchema).optional().default([]),
     transitions: z.array(TransitionRuleSchema).min(1),
-    integrations: z.array(IntegrationConfigSchema).optional().default([]),
   })
   .superRefine((seed, ctx) => {
     // Bug 2 fix: detect duplicate flow names explicitly before building the Set
@@ -131,21 +124,6 @@ export const SeedFileSchema = z
         });
       } else {
         gateNames.add(name);
-      }
-    }
-
-    // Detect duplicate integration capabilities
-    const integrationCapabilities = new Set<string>();
-    for (let i = 0; i < seed.integrations.length; i++) {
-      const cap = seed.integrations[i].capability;
-      if (integrationCapabilities.has(cap)) {
-        ctx.addIssue({
-          code: "custom",
-          message: `Duplicate integration capability: ${cap}`,
-          path: ["integrations", i, "capability"],
-        });
-      } else {
-        integrationCapabilities.add(cap);
       }
     }
 
@@ -296,5 +274,4 @@ export type FlowDefinition = z.infer<typeof FlowDefinitionSchema>;
 export type StateDefinition = z.infer<typeof StateDefinitionSchema>;
 export type GateDefinition = z.infer<typeof GateDefinitionSchema>;
 export type TransitionRule = z.infer<typeof TransitionRuleSchema>;
-export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
 export type SeedFile = z.infer<typeof SeedFileSchema>;

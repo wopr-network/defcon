@@ -1,11 +1,7 @@
-import type { IFlowRepository, IGateRepository, IIntegrationConfigRepository } from "../repositories/interfaces.js";
+import type { IFlowRepository, IGateRepository } from "../repositories/interfaces.js";
 import type { SeedFile } from "./zod-schemas.js";
 
-export async function exportSeed(
-  flowRepo: IFlowRepository,
-  gateRepo: IGateRepository,
-  integrationRepo: IIntegrationConfigRepository,
-): Promise<SeedFile> {
+export async function exportSeed(flowRepo: IFlowRepository, gateRepo: IGateRepository): Promise<SeedFile> {
   const flows = await flowRepo.listAll();
 
   // Fetch all gates once, build ID->name map (no N+1)
@@ -72,18 +68,10 @@ export async function exportSeed(
     })),
   );
 
-  const integrationRows = await integrationRepo.listAll();
-  const seedIntegrations: SeedFile["integrations"] = integrationRows.map((r) => ({
-    capability: r.capability,
-    adapter: r.adapter,
-    config: r.config ?? undefined,
-  }));
-
   return {
     flows: seedFlows,
     states: seedStates,
     gates: gateEntries,
     transitions: seedTransitions,
-    integrations: seedIntegrations,
   };
 }

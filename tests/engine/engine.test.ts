@@ -12,7 +12,7 @@ import type {
   Transition,
   Invocation,
 } from "../../src/repositories/interfaces.js";
-import type { IEventBusAdapter, EngineEvent } from "../../src/adapters/interfaces.js";
+import type { IEventBusAdapter, EngineEvent } from "../../src/engine/event-types.js";
 
 // --- Test helpers ---
 

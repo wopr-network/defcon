@@ -61,13 +61,6 @@ export const transitionRules = sqliteTable("transition_rules", {
   createdAt: integer("created_at"),
 });
 
-export const integrationConfig = sqliteTable("integration_config", {
-  id: text("id").primaryKey(),
-  capability: text("capability").notNull().unique(),
-  adapter: text("adapter").notNull(),
-  config: text("config", { mode: "json" }),
-});
-
 export const flowVersions = sqliteTable(
   "flow_versions",
   {

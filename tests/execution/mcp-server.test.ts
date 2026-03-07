@@ -10,7 +10,6 @@ import type {
   IEventRepository,
   IFlowRepository,
   IGateRepository,
-  IIntegrationRepository,
   IInvocationRepository,
   ITransitionLogRepository,
 } from "../../src/repositories/interfaces.js";
@@ -222,10 +221,6 @@ function createMockDeps(): McpServerDeps {
     emitDefinitionChanged: async () => {},
   };
 
-  const integrationRepo: IIntegrationRepository = {
-    set: async (capability, adapter, config) => ({ capability, adapter, config: config ?? null }),
-  };
-
   const noopEventEmitter = { emit: async () => {} };
 
   const engine = new Engine({
@@ -238,7 +233,7 @@ function createMockDeps(): McpServerDeps {
     eventEmitter: noopEventEmitter,
   });
 
-  return { entities, flows, invocations, gates, transitions, eventRepo, integrationRepo, engine };
+  return { entities, flows, invocations, gates, transitions, eventRepo, engine };
 }
 
 // ─── Tests ───
@@ -304,9 +299,9 @@ describe("MCP tool handlers", () => {
     return result;
   }
 
-  it("lists all 19 tools", async () => {
+  it("lists all 18 tools", async () => {
     const result = await listTools();
-    expect(result.tools).toHaveLength(19);
+    expect(result.tools).toHaveLength(18);
     const names = result.tools.map((t: { name: string }) => t.name).sort();
     expect(names).toEqual([
       "admin.flow.create",
@@ -315,7 +310,6 @@ describe("MCP tool handlers", () => {
       "admin.flow.update",
       "admin.gate.attach",
       "admin.gate.create",
-      "admin.integration.set",
       "admin.state.create",
       "admin.state.update",
       "admin.transition.create",

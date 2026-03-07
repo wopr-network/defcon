@@ -19,10 +19,6 @@ describe("schema tables exist", () => {
     expect(schema.gateDefinitions).toBeDefined();
   });
 
-  it("exports integrationConfig table", () => {
-    expect(schema.integrationConfig).toBeDefined();
-  });
-
   it("exports flowVersions table", () => {
     expect(schema.flowVersions).toBeDefined();
   });
