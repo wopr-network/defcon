@@ -101,7 +101,7 @@ export class Engine {
       const gate = await this.gateRepo.get(transition.gateId);
       if (!gate) throw new Error(`Gate "${transition.gateId}" not found`);
 
-      const gateResult = await evaluateGate(gate, entity, this.gateRepo);
+      const gateResult = await evaluateGate(gate, entity, this.gateRepo, flow.gateTimeoutMs);
       if (!gateResult.passed) {
         // Persist gate failure into entity artifacts for retry context
         const priorFailures = Array.isArray(entity.artifacts?.gate_failures)

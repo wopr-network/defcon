@@ -93,6 +93,7 @@ async function parseSeedAndLoad(
         initialState: f.initialState,
         maxConcurrent: f.maxConcurrent,
         maxConcurrentPerRepo: f.maxConcurrentPerRepo,
+        gateTimeoutMs: f.gateTimeoutMs,
         createdBy: f.createdBy,
         discipline: f.discipline,
         defaultModelTier: f.defaultModelTier,

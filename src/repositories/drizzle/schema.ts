@@ -11,6 +11,7 @@ export const flowDefinitions = sqliteTable("flow_definitions", {
   maxConcurrent: integer("max_concurrent").default(0),
   maxConcurrentPerRepo: integer("max_concurrent_per_repo").default(0),
   affinityWindowMs: integer("affinity_window_ms").default(300000),
+  gateTimeoutMs: integer("gate_timeout_ms"),
   version: integer("version").default(1),
   createdBy: text("created_by"),
   discipline: text("discipline"),
@@ -47,7 +48,7 @@ export const gateDefinitions = sqliteTable("gate_definitions", {
   command: text("command"),
   functionRef: text("function_ref"),
   apiConfig: text("api_config", { mode: "json" }),
-  timeoutMs: integer("timeout_ms").default(30000),
+  timeoutMs: integer("timeout_ms"),
   failurePrompt: text("failure_prompt"),
   timeoutPrompt: text("timeout_prompt"),
 });

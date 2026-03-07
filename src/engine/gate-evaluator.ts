@@ -15,11 +15,31 @@ export interface GateEvalResult {
 // so the containment check works even when the project directory itself is a symlink.
 const PROJECT_ROOT = realpathSync(resolve(fileURLToPath(new URL("../..", import.meta.url))));
 
+function getSystemDefaultGateTimeout(): number {
+  const parsed = parseInt(process.env.DEFCON_DEFAULT_GATE_TIMEOUT_MS ?? "", 10);
+  return !Number.isNaN(parsed) && parsed > 0 ? parsed : 300000;
+}
+
+export function resolveGateTimeout(
+  gateTimeoutMs: number | null | undefined,
+  flowGateTimeoutMs: number | null | undefined,
+): number {
+  if (gateTimeoutMs != null && gateTimeoutMs > 0) return gateTimeoutMs;
+  if (flowGateTimeoutMs != null && flowGateTimeoutMs > 0) return flowGateTimeoutMs;
+  return getSystemDefaultGateTimeout();
+}
+
 /**
  * Evaluate a gate against an entity. Records the result in gateRepo.
  * Supports "command", "function", and "api" gate types.
  */
-export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRepository): Promise<GateEvalResult> {
+export async function evaluateGate(
+  gate: Gate,
+  entity: Entity,
+  gateRepo: IGateRepository,
+  flowGateTimeoutMs?: number | null,
+): Promise<GateEvalResult> {
+  const effectiveTimeout = resolveGateTimeout(gate.timeoutMs, flowGateTimeoutMs);
   let passed = false;
   let output = "";
   let timedOut = false;
@@ -47,7 +67,7 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
     }
     const [, ...args] = renderedCommand.split(/\s+/);
     const resolvedPath = validation.resolvedPath ?? renderedCommand.split(/\s+/)[0];
-    const result = await runCommand(resolvedPath, args, gate.timeoutMs);
+    const result = await runCommand(resolvedPath, args, effectiveTimeout);
     passed = result.exitCode === 0;
     output = result.output;
     timedOut = result.timedOut;
@@ -58,7 +78,7 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
         await gateRepo.record(entity.id, gate.id, result.passed, result.output);
         return result;
       }
-      const result = await runFunction(gate.functionRef, entity, gate);
+      const result = await runFunction(gate.functionRef, entity, gate, effectiveTimeout);
       passed = result.passed;
       output = result.output;
       timedOut = result.timedOut;
@@ -90,7 +110,7 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
       const method = (gate.apiConfig.method as string) ?? "GET";
       const expectStatus = (gate.apiConfig.expectStatus as number) ?? 200;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), gate.timeoutMs ?? 10000);
+      const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
       try {
         const res = await fetch(url, { method, signal: controller.signal });
         passed = res.status === expectStatus;
@@ -115,6 +135,7 @@ async function runFunction(
   functionRef: string,
   entity: Entity,
   gate: Gate,
+  effectiveTimeout: number,
 ): Promise<{ passed: boolean; output: string; timedOut: boolean }> {
   const lastColon = functionRef.lastIndexOf(":");
   if (lastColon === -1) {
@@ -144,7 +165,7 @@ async function runFunction(
     throw new Error(`Gate function "${exportName}" not found in ${modulePath}`);
   }
 
-  const timeout = gate.timeoutMs != null && gate.timeoutMs > 0 ? gate.timeoutMs : 30000;
+  const timeout = effectiveTimeout;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<{ passed: boolean; output: string; timedOut: boolean }>((resolve) => {
     timer = setTimeout(

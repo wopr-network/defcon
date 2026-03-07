@@ -63,6 +63,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     maxConcurrent: r.maxConcurrent ?? 0,
     maxConcurrentPerRepo: r.maxConcurrentPerRepo ?? 0,
     affinityWindowMs: r.affinityWindowMs ?? 300000,
+    gateTimeoutMs: r.gateTimeoutMs ?? null,
     version: r.version ?? 1,
     createdBy: r.createdBy ?? null,
     discipline: r.discipline ?? null,
@@ -106,6 +107,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       maxConcurrent: input.maxConcurrent ?? 0,
       maxConcurrentPerRepo: input.maxConcurrentPerRepo ?? 0,
       affinityWindowMs: input.affinityWindowMs ?? 300000,
+      gateTimeoutMs: input.gateTimeoutMs ?? null,
       version: 1,
       createdBy: input.createdBy ?? null,
       discipline: input.discipline ?? null,
@@ -152,6 +154,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.maxConcurrent !== undefined) updateValues.maxConcurrent = changes.maxConcurrent;
     if (changes.maxConcurrentPerRepo !== undefined) updateValues.maxConcurrentPerRepo = changes.maxConcurrentPerRepo;
     if (changes.affinityWindowMs !== undefined) updateValues.affinityWindowMs = changes.affinityWindowMs;
+    if (changes.gateTimeoutMs !== undefined) updateValues.gateTimeoutMs = changes.gateTimeoutMs;
     if (changes.version !== undefined) updateValues.version = changes.version;
     if (changes.createdBy !== undefined) updateValues.createdBy = changes.createdBy;
     if (changes.discipline !== undefined) updateValues.discipline = changes.discipline;
@@ -268,6 +271,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       maxConcurrent: flow.maxConcurrent,
       maxConcurrentPerRepo: flow.maxConcurrentPerRepo,
       affinityWindowMs: flow.affinityWindowMs,
+      gateTimeoutMs: flow.gateTimeoutMs,
       version: flow.version,
       createdBy: flow.createdBy,
       timeoutPrompt: flow.timeoutPrompt,
@@ -326,6 +330,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       maxConcurrent: number;
       maxConcurrentPerRepo: number;
       affinityWindowMs: number;
+      gateTimeoutMs: number | null;
       version: number;
       createdBy: string | null;
       discipline: string | null;
@@ -381,6 +386,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
           maxConcurrent: snap.maxConcurrent,
           maxConcurrentPerRepo: snap.maxConcurrentPerRepo,
           affinityWindowMs: snap.affinityWindowMs,
+          gateTimeoutMs: snap.gateTimeoutMs ?? null,
           version: snap.version,
           createdBy: snap.createdBy,
           discipline: snap.discipline,
