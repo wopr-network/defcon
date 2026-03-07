@@ -115,17 +115,25 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
   });
 
   // --- Entity report ---
-  router.add("POST", "/api/entities/:id/report", async (req) => {
-    const authErr = requireWorkerToken(deps, req);
-    if (authErr) return authErr;
-    const args: Record<string, unknown> = {
-      entity_id: req.params.id,
-      signal: req.body?.signal as string,
-    };
-    if (req.body?.artifacts) args.artifacts = req.body.artifacts;
-    const result = await callToolHandler(deps.mcpDeps, "flow.report", args);
-    return mcpResultToApi(result);
-  });
+  // longRunning: true — flow.report blocks for the duration of gate evaluation
+  // (potentially many minutes). The server handler calls req.setTimeout(0) for
+  // this route specifically so only this connection bypasses the global 30s timeout.
+  router.add(
+    "POST",
+    "/api/entities/:id/report",
+    async (req) => {
+      const authErr = requireWorkerToken(deps, req);
+      if (authErr) return authErr;
+      const args: Record<string, unknown> = {
+        entity_id: req.params.id,
+        signal: req.body?.signal as string,
+      };
+      if (req.body?.artifacts) args.artifacts = req.body.artifacts;
+      const result = await callToolHandler(deps.mcpDeps, "flow.report", args);
+      return mcpResultToApi(result);
+    },
+    { longRunning: true },
+  );
 
   // --- Entity fail ---
   router.add("POST", "/api/entities/:id/fail", async (req) => {
@@ -243,6 +251,13 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
       return;
     }
 
+    // flow.report blocks until gate evaluation completes (potentially many
+    // minutes). Extend timeout per-request for this route only; all other
+    // routes keep the global 30s limit.
+    if (match.longRunning) {
+      req.setTimeout(0);
+    }
+
     let body: Record<string, unknown> | null = null;
     if (req.method === "POST" || req.method === "PUT") {
       try {
@@ -282,11 +297,11 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
     }
   });
 
-  // Disable Node's default request/headers timeouts. flow.report blocks for the
-  // duration of gate evaluation, which can take many minutes (e.g. CI pipeline).
-  // Node's default 5-minute requestTimeout would silently kill these connections.
-  server.requestTimeout = 0;
-  server.headersTimeout = 0;
+  // Sensible defaults protect all routes from Slowloris/slow-header DoS.
+  // The entity report route calls req.setTimeout(0) per-request to bypass this
+  // limit only for connections that need long-running gate evaluation.
+  server.requestTimeout = 30000;
+  server.headersTimeout = 10000;
 
   return server;
 }

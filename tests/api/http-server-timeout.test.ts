@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createHttpServer } from "../../src/api/server.js";
 
 describe("HTTP server timeout configuration", () => {
-  it("should disable request timeout to support long-running flow.report calls", () => {
+  it("should set sensible global timeouts with flow.report route extending its own timeout per-request", () => {
     // Minimal deps — we only care about server config, not routing
     const engine = {} as any;
     const mcpDeps = {
@@ -17,12 +17,13 @@ describe("HTTP server timeout configuration", () => {
 
     const server = createHttpServer({ engine, mcpDeps });
 
-    // Node.js defaults: requestTimeout=300000 (5 min), headersTimeout=60000 (1 min)
-    // flow.report can block for the duration of gate evaluation (potentially 10+ minutes)
-    // Both must be 0 (disabled) to prevent premature disconnects
-    expect(server.requestTimeout).toBe(0);
-    expect(server.headersTimeout).toBe(0);
+    // Global defaults protect all routes from Slowloris/DoS.
+    // flow.report overrides timeout per-request via req.setTimeout(0).
+    expect(server.requestTimeout).toBe(30000);
+    expect(server.headersTimeout).toBe(10000);
 
-    server.close();
+    if (server.listening) {
+      server.close();
+    }
   });
 });

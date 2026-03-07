@@ -17,17 +17,19 @@ interface Route {
   pattern: RegExp;
   paramNames: string[];
   handler: Handler;
+  longRunning?: boolean;
 }
 
 interface MatchResult {
   params: Record<string, string>;
   handler: Handler;
+  longRunning?: boolean;
 }
 
 export class Router {
   private routes: Route[] = [];
 
-  add(method: string, path: string, handler: Handler): void {
+  add(method: string, path: string, handler: Handler, options?: { longRunning?: boolean }): void {
     const paramNames: string[] = [];
     // Split on param segments, escape literal segments, then reassemble
     const patternStr = path
@@ -49,6 +51,7 @@ export class Router {
       pattern: new RegExp(`^${patternStr}$`),
       paramNames,
       handler,
+      longRunning: options?.longRunning,
     });
   }
 
@@ -61,7 +64,7 @@ export class Router {
         route.paramNames.forEach((name, i) => {
           params[name] = m[i + 1] as string;
         });
-        return { params, handler: route.handler };
+        return { params, handler: route.handler, longRunning: route.longRunning };
       }
     }
     return null;
