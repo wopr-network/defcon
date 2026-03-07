@@ -28,7 +28,7 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
       return { passed: false, output: msg };
     }
     const [, ...args] = gate.command.split(/\s+/);
-    const resolvedPath = validation.resolvedPath ?? gate.command;
+    const resolvedPath = validation.resolvedPath ?? gate.command.split(/\s+/)[0];
     const result = await runCommand(resolvedPath, args, gate.timeoutMs);
     passed = result.exitCode === 0;
     output = result.output;
