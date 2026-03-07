@@ -4,15 +4,13 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import type { EngineEvent, IEventBusAdapter } from "../../src/adapters/interfaces.js";
+import type { EngineEvent, IEventBusAdapter } from "../../src/engine/event-types.js";
 import { Engine } from "../../src/engine/engine.js";
 import {
   DrizzleEntityRepository,
   DrizzleEventRepository,
   DrizzleFlowRepository,
   DrizzleGateRepository,
-  DrizzleIntegrationConfigRepository,
-  DrizzleIntegrationRepository,
   DrizzleInvocationRepository,
   DrizzleTransitionLogRepository,
 } from "../../src/repositories/drizzle/index.js";
@@ -43,9 +41,7 @@ function setupEngine() {
   const invocationRepo = new DrizzleInvocationRepository(db);
   const gateRepo = new DrizzleGateRepository(db);
   const transitionLogRepo = new DrizzleTransitionLogRepository(db);
-  const integrationConfigRepo = new DrizzleIntegrationConfigRepository(db);
   const eventRepo = new DrizzleEventRepository(db);
-  const integrationRepo = new DrizzleIntegrationRepository(db);
 
   const engine = new Engine({
     entityRepo,
@@ -67,9 +63,7 @@ function setupEngine() {
     invocationRepo,
     gateRepo,
     transitionLogRepo,
-    integrationConfigRepo,
     eventRepo,
-    integrationRepo,
   };
 }
 
@@ -90,7 +84,7 @@ describe("Engine integration (in-memory SQLite)", () => {
 
   it("happy path: seed load → entity create → signal through to terminal", async () => {
     const seedPath = resolve(__dirname, "fixtures/simple-flow.seed.json");
-    const seedResult = await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.integrationConfigRepo, ctx.sqlite);
+    const seedResult = await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.sqlite);
     expect(seedResult.flows).toBe(1);
 
     const entity = await ctx.engine.createEntity("simple-pipeline");
@@ -120,7 +114,7 @@ describe("Engine integration (in-memory SQLite)", () => {
 
   it("gate evaluation: gate blocks → update gate → gate passes", async () => {
     const seedPath = resolve(__dirname, "fixtures/gated-flow.seed.json");
-    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.integrationConfigRepo, ctx.sqlite);
+    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.sqlite);
 
     const entity = await ctx.engine.createEntity("gated-pipeline");
     expect(entity.state).toBe("coding");
@@ -157,7 +151,7 @@ describe("Engine integration (in-memory SQLite)", () => {
 
   it("multi-entity concurrency: 10 entities reach correct states independently", async () => {
     const seedPath = resolve(__dirname, "fixtures/simple-flow.seed.json");
-    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.integrationConfigRepo, ctx.sqlite);
+    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.sqlite);
 
     const entities = await Promise.all(Array.from({ length: 10 }, () => ctx.engine.createEntity("simple-pipeline")));
     expect(entities).toHaveLength(10);
@@ -187,7 +181,7 @@ describe("Engine integration (in-memory SQLite)", () => {
 
   it("spawn flow: parent terminal transition spawns child entity", async () => {
     const seedPath = resolve(__dirname, "fixtures/spawn-flow.seed.json");
-    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.integrationConfigRepo, ctx.sqlite);
+    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.sqlite);
 
     const parentEntity = await ctx.engine.createEntity("parent-flow");
     expect(parentEntity.state).toBe("working");
@@ -213,7 +207,7 @@ describe("Engine integration (in-memory SQLite)", () => {
 
   it("MCP flow: claim → get_prompt → report through to terminal via callToolHandler", async () => {
     const seedPath = resolve(__dirname, "fixtures/simple-flow.seed.json");
-    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.integrationConfigRepo, ctx.sqlite);
+    await loadSeed(seedPath, ctx.flowRepo, ctx.gateRepo, ctx.sqlite);
 
     const entity = await ctx.engine.createEntity("simple-pipeline");
     const r1 = await ctx.engine.processSignal(entity.id, "assigned");
@@ -227,7 +221,6 @@ describe("Engine integration (in-memory SQLite)", () => {
       gates: ctx.gateRepo,
       transitions: ctx.transitionLogRepo,
       eventRepo: ctx.eventRepo,
-      integrationRepo: ctx.integrationRepo,
       engine: ctx.engine,
     };
 

@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
-import type { IFlowRepository, IGateRepository, IIntegrationConfigRepository } from "../repositories/interfaces.js";
+import type { IFlowRepository, IGateRepository } from "../repositories/interfaces.js";
 import { SeedFileSchema } from "./zod-schemas.js";
 
 export interface LoadSeedOptions {
@@ -11,14 +11,12 @@ export interface LoadSeedOptions {
 export interface LoadSeedResult {
   flows: number;
   gates: number;
-  integrations: number;
 }
 
 export async function loadSeed(
   seedPath: string,
   flowRepo: IFlowRepository,
   gateRepo: IGateRepository,
-  integrationRepo: IIntegrationConfigRepository,
   sqlite: InstanceType<typeof Database>,
   options?: LoadSeedOptions,
 ): Promise<LoadSeedResult> {
@@ -38,7 +36,7 @@ export async function loadSeed(
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       // File doesn't exist — let readFileSync throw its normal ENOENT error
       const raw = readFileSync(resolvedSeed, "utf-8");
-      return parseSeedAndLoad(raw, flowRepo, gateRepo, integrationRepo, sqlite);
+      return parseSeedAndLoad(raw, flowRepo, gateRepo, sqlite);
     }
     throw err;
   }
@@ -56,14 +54,13 @@ export async function loadSeed(
   }
 
   const raw = readFileSync(realSeed, "utf-8");
-  return parseSeedAndLoad(raw, flowRepo, gateRepo, integrationRepo, sqlite);
+  return parseSeedAndLoad(raw, flowRepo, gateRepo, sqlite);
 }
 
 async function parseSeedAndLoad(
   raw: string,
   flowRepo: IFlowRepository,
   gateRepo: IGateRepository,
-  integrationRepo: IIntegrationConfigRepository,
   sqlite: InstanceType<typeof Database>,
 ): Promise<LoadSeedResult> {
   const json = JSON.parse(raw);
@@ -129,15 +126,6 @@ async function parseSeedAndLoad(
       }
     }
 
-    // 3. Insert integrations
-    for (const i of parsed.integrations) {
-      await integrationRepo.create({
-        capability: i.capability,
-        adapter: i.adapter,
-        config: i.config,
-      });
-    }
-
     sqlite.exec("COMMIT");
   } catch (err) {
     sqlite.exec("ROLLBACK");
@@ -147,6 +135,5 @@ async function parseSeedAndLoad(
   return {
     flows: parsed.flows.length,
     gates: parsed.gates.length,
-    integrations: parsed.integrations.length,
   };
 }

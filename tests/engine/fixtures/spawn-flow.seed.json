@@ -38,6 +38,5 @@
       "trigger": "process",
       "priority": 0
     }
-  ],
-  "integrations": []
+  ]
 }

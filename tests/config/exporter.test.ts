@@ -11,7 +11,6 @@ import { SeedFileSchema } from "../../src/config/zod-schemas.js";
 import * as schema from "../../src/repositories/drizzle/schema.js";
 import { DrizzleFlowRepository } from "../../src/repositories/drizzle/flow.repo.js";
 import { DrizzleGateRepository } from "../../src/repositories/drizzle/gate.repo.js";
-import { DrizzleIntegrationConfigRepository } from "../../src/repositories/drizzle/integration-config.repo.js";
 
 function setupDb() {
   const sqlite = new Database(":memory:");
@@ -21,8 +20,7 @@ function setupDb() {
   migrate(db, { migrationsFolder: "./drizzle" });
   const flowRepo = new DrizzleFlowRepository(db);
   const gateRepo = new DrizzleGateRepository(db);
-  const integrationRepo = new DrizzleIntegrationConfigRepository(db);
-  return { db, sqlite, flowRepo, gateRepo, integrationRepo };
+  return { db, sqlite, flowRepo, gateRepo };
 }
 
 function writeSeedFile(seed: unknown): string {
@@ -49,18 +47,17 @@ const validSeed = {
       gateName: "lint-pass",
     },
   ],
-  integrations: [{ capability: "notifications", adapter: "discord", config: { webhookUrl: "https://example.com" } }],
 };
 
 const tmpRoot = realpathSync(tmpdir());
 
 describe("exportSeed", () => {
   it("exports current DB state as a valid SeedFile", async () => {
-    const { sqlite, flowRepo, gateRepo, integrationRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seedPath = writeSeedFile(validSeed);
-    await loadSeed(seedPath, flowRepo, gateRepo, integrationRepo, sqlite, { allowedRoot: tmpRoot });
+    await loadSeed(seedPath, flowRepo, gateRepo, sqlite, { allowedRoot: tmpRoot });
 
-    const exported = await exportSeed(flowRepo, gateRepo, integrationRepo);
+    const exported = await exportSeed(flowRepo, gateRepo);
 
     const result = SeedFileSchema.safeParse(exported);
     expect(result.success).toBe(true);
@@ -72,21 +69,19 @@ describe("exportSeed", () => {
     expect(exported.gates[0].name).toBe("lint-pass");
     expect(exported.transitions).toHaveLength(1);
     expect(exported.transitions[0].gateName).toBe("lint-pass");
-    expect(exported.integrations).toHaveLength(1);
 
     sqlite.close();
   });
 
   it("exports empty DB as minimal valid structure", async () => {
-    const { sqlite, flowRepo, gateRepo, integrationRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
 
-    const exported = await exportSeed(flowRepo, gateRepo, integrationRepo);
+    const exported = await exportSeed(flowRepo, gateRepo);
 
     expect(exported.flows).toEqual([]);
     expect(exported.states).toEqual([]);
     expect(exported.gates).toEqual([]);
     expect(exported.transitions).toEqual([]);
-    expect(exported.integrations).toEqual([]);
 
     sqlite.close();
   });
@@ -97,28 +92,25 @@ describe("exportSeed", () => {
     migrate(db1, { migrationsFolder: "./drizzle" });
     const flowRepo1 = new DrizzleFlowRepository(db1);
     const gateRepo1 = new DrizzleGateRepository(db1);
-    const integrationRepo1 = new DrizzleIntegrationConfigRepository(db1);
     const seedPath = writeSeedFile(validSeed);
-    await loadSeed(seedPath, flowRepo1, gateRepo1, integrationRepo1, sqlite1, { allowedRoot: tmpRoot });
+    await loadSeed(seedPath, flowRepo1, gateRepo1, sqlite1, { allowedRoot: tmpRoot });
 
-    const exported = await exportSeed(flowRepo1, gateRepo1, integrationRepo1);
+    const exported = await exportSeed(flowRepo1, gateRepo1);
 
     const sqlite2 = new Database(":memory:");
     const db2 = drizzle(sqlite2, { schema });
     migrate(db2, { migrationsFolder: "./drizzle" });
     const flowRepo2 = new DrizzleFlowRepository(db2);
     const gateRepo2 = new DrizzleGateRepository(db2);
-    const integrationRepo2 = new DrizzleIntegrationConfigRepository(db2);
     const exportPath = writeSeedFile(exported);
-    await loadSeed(exportPath, flowRepo2, gateRepo2, integrationRepo2, sqlite2, { allowedRoot: tmpRoot });
+    await loadSeed(exportPath, flowRepo2, gateRepo2, sqlite2, { allowedRoot: tmpRoot });
 
-    const reExported = await exportSeed(flowRepo2, gateRepo2, integrationRepo2);
+    const reExported = await exportSeed(flowRepo2, gateRepo2);
 
     expect(reExported.flows.length).toBe(exported.flows.length);
     expect(reExported.states.length).toBe(exported.states.length);
     expect(reExported.gates.length).toBe(exported.gates.length);
     expect(reExported.transitions.length).toBe(exported.transitions.length);
-    expect(reExported.integrations.length).toBe(exported.integrations.length);
 
     expect(reExported.flows.map((f) => f.name).sort()).toEqual(exported.flows.map((f) => f.name).sort());
     expect(reExported.gates.map((g) => g.name).sort()).toEqual(exported.gates.map((g) => g.name).sort());

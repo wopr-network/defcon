@@ -1,4 +1,3 @@
-import type { IEventBusAdapter } from "../adapters/interfaces.js";
 import type {
   Artifacts,
   EnrichedEntity,
@@ -10,6 +9,7 @@ import type {
   IInvocationRepository,
   ITransitionLogRepository,
 } from "../repositories/interfaces.js";
+import type { IEventBusAdapter } from "./event-types.js";
 import { executeSpawn } from "./flow-spawner.js";
 import { evaluateGate } from "./gate-evaluator.js";
 import { buildInvocation } from "./invocation-builder.js";

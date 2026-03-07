@@ -7,20 +7,14 @@ import Database from "better-sqlite3";
 import { Command } from "commander";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { AnthropicAdapter } from "../adapters/anthropic.js";
-import { CompositeEventBusAdapter } from "../adapters/composite.js";
-import { LinearAdapter } from "../adapters/linear.js";
-import { StdoutAdapter } from "../adapters/stdout.js";
 import { exportSeed } from "../config/exporter.js";
-import { resolveConfigSecrets } from "../config/resolve-secrets.js";
 import { loadSeed } from "../config/seed-loader.js";
 import { Engine } from "../engine/engine.js";
+import { EventEmitter } from "../engine/event-emitter.js";
 import { DrizzleEntityRepository } from "../repositories/drizzle/entity.repo.js";
 import { DrizzleEventRepository } from "../repositories/drizzle/event.repo.js";
 import { DrizzleFlowRepository } from "../repositories/drizzle/flow.repo.js";
 import { DrizzleGateRepository } from "../repositories/drizzle/gate.repo.js";
-import { DrizzleIntegrationRepository } from "../repositories/drizzle/integration.repo.js";
-import { DrizzleIntegrationConfigRepository } from "../repositories/drizzle/integration-config.repo.js";
 import { DrizzleInvocationRepository } from "../repositories/drizzle/invocation.repo.js";
 import * as schema from "../repositories/drizzle/schema.js";
 import {
@@ -30,13 +24,11 @@ import {
   flowVersions,
   gateDefinitions,
   gateResults,
-  integrationConfig,
   invocations,
   stateDefinitions,
   transitionRules,
 } from "../repositories/drizzle/schema.js";
 import { DrizzleTransitionLogRepository } from "../repositories/drizzle/transition-log.repo.js";
-import { ActiveRunner } from "./active-runner.js";
 import type { McpServerDeps, McpServerOpts } from "./mcp-server.js";
 import { createMcpServer, startStdioServer } from "./mcp-server.js";
 
@@ -81,23 +73,20 @@ program
       db.delete(entities).run();
       db.delete(transitionRules).run();
       db.delete(stateDefinitions).run();
-      db.delete(integrationConfig).run();
       db.delete(flowVersions).run();
       db.delete(gateDefinitions).run();
       db.delete(flowDefinitions).run();
     }
 
-    const integrationRepo = new DrizzleIntegrationConfigRepository(db);
     const seedRoot = process.env.DEFCON_SEED_ROOT;
     const result = await loadSeed(
       resolve(seedPath),
       flowRepo,
       gateRepo,
-      integrationRepo,
       sqlite,
       seedRoot ? { allowedRoot: seedRoot } : undefined,
     );
-    console.log(`Loaded seed: flows: ${result.flows}, gates: ${result.gates}, integrations: ${result.integrations}`);
+    console.log(`Loaded seed: flows: ${result.flows}, gates: ${result.gates}`);
     sqlite.close();
   });
 
@@ -110,8 +99,7 @@ program
     const { db, sqlite } = openDb(opts.db);
     const flowRepo = new DrizzleFlowRepository(db);
     const gateRepo = new DrizzleGateRepository(db);
-    const integrationRepo = new DrizzleIntegrationConfigRepository(db);
-    const seed = await exportSeed(flowRepo, gateRepo, integrationRepo);
+    const seed = await exportSeed(flowRepo, gateRepo);
     const json = JSON.stringify(seed, null, 2);
 
     if (opts.out) {
@@ -145,12 +133,12 @@ program
     const gateRepo = new DrizzleGateRepository(db);
     const transitionLogRepo = new DrizzleTransitionLogRepository(db);
 
-    // Suppress stdout events in stdio mode — stdout carries the JSON-RPC stream
-    // and any extra output corrupts it.
-    const eventEmitter =
-      opts.transport === "stdio"
-        ? new CompositeEventBusAdapter([])
-        : new CompositeEventBusAdapter([new StdoutAdapter()]);
+    const eventEmitter = new EventEmitter();
+    eventEmitter.register({
+      emit: async (event) => {
+        process.stderr.write(`[event] ${event.type} ${JSON.stringify(event)}\n`);
+      },
+    });
 
     const engine = new Engine({
       entityRepo,
@@ -169,7 +157,6 @@ program
       gates: gateRepo,
       transitions: transitionLogRepo,
       eventRepo: new DrizzleEventRepository(db),
-      integrationRepo: new DrizzleIntegrationRepository(db),
       engine,
     };
 
@@ -293,117 +280,6 @@ program
     }
   });
 
-// ─── run ───
-program
-  .command("run")
-  .description("Start active runner")
-  .option("--flow <name>", "Flow name to filter")
-  .option("--once", "Process one item and exit")
-  .option("--poll-interval <ms>", "Poll interval in milliseconds", "5000")
-  .option("--db <path>", "Database path", DB_DEFAULT)
-  .option("--reaper-interval <ms>", "Reaper poll interval in milliseconds", REAPER_INTERVAL_DEFAULT)
-  .option("--claim-ttl <ms>", "Claim TTL in milliseconds", CLAIM_TTL_DEFAULT)
-  .action(async (opts) => {
-    const pollInterval = parseInt(opts.pollInterval, 10);
-    if (Number.isNaN(pollInterval) || pollInterval < 100) {
-      console.error(`Invalid --poll-interval: must be a number >= 100ms`);
-      process.exit(1);
-    }
-    const reaperInterval = parseInt(opts.reaperInterval, 10);
-    if (Number.isNaN(reaperInterval) || reaperInterval < 1000) {
-      console.error("--reaper-interval must be a number >= 1000ms");
-      process.exit(1);
-    }
-    const claimTtl = parseInt(opts.claimTtl, 10);
-    if (Number.isNaN(claimTtl) || claimTtl < 5000) {
-      console.error("--claim-ttl must be a number >= 5000ms");
-      process.exit(1);
-    }
-
-    const { db, sqlite } = openDb(opts.db);
-    const flowRepo = new DrizzleFlowRepository(db);
-    const entityRepo = new DrizzleEntityRepository(db);
-    const invocationRepo = new DrizzleInvocationRepository(db);
-    const gateRepo = new DrizzleGateRepository(db);
-    const transitionLogRepo = new DrizzleTransitionLogRepository(db);
-    const integrationConfigRepo = new DrizzleIntegrationConfigRepository(db);
-
-    const eventEmitter = new CompositeEventBusAdapter([new StdoutAdapter()]);
-
-    // Resolve AI adapter from integration config or env
-    const configs = await integrationConfigRepo.listAll();
-    const aiConfig = configs.find((c) => c.capability === "ai-provider");
-    let resolvedAiConfig: Record<string, unknown> | null;
-    try {
-      resolvedAiConfig = resolveConfigSecrets((aiConfig?.config as Record<string, unknown>) ?? null);
-    } catch (err) {
-      sqlite.close();
-      console.error("Failed to resolve config secrets:", err instanceof Error ? err.message : String(err));
-      process.exit(1);
-    }
-    const apiKey = (resolvedAiConfig as { apiKey?: string } | null)?.apiKey ?? process.env.ANTHROPIC_API_KEY;
-
-    if (!apiKey) {
-      console.error("No Anthropic API key found. Set ANTHROPIC_API_KEY or configure via integration_config.");
-      sqlite.close();
-      process.exit(1);
-    }
-
-    const aiAdapter = new AnthropicAdapter({ apiKey });
-
-    const engine = new Engine({
-      entityRepo,
-      flowRepo,
-      invocationRepo,
-      gateRepo,
-      transitionLogRepo,
-      adapters: new Map(),
-      eventEmitter,
-    });
-
-    const stopReaper = engine.startReaper(reaperInterval, claimTtl);
-
-    const runner = new ActiveRunner({
-      engine,
-      aiAdapter,
-      invocationRepo,
-      entityRepo,
-      flowRepo,
-    });
-
-    const ac = new AbortController();
-    let closed = false;
-    const cleanup = async () => {
-      if (closed) return;
-      closed = true;
-      ac.abort();
-      await stopReaper();
-      sqlite.close();
-      process.exit(0);
-    };
-    process.on("SIGINT", () => {
-      cleanup().catch(() => process.exit(1));
-    });
-    process.on("SIGTERM", () => {
-      cleanup().catch(() => process.exit(1));
-    });
-
-    console.log(`Active runner started${opts.flow ? ` (flow: ${opts.flow})` : ""}, poll interval: ${pollInterval}ms`);
-
-    await runner.run({
-      flowName: opts.flow,
-      once: opts.once ?? false,
-      pollIntervalMs: pollInterval,
-      signal: ac.signal,
-    });
-
-    if (!closed) {
-      closed = true;
-      await stopReaper();
-      sqlite.close();
-    }
-  });
-
 // ─── status ───
 program
   .command("status")
@@ -460,117 +336,6 @@ program
       console.log(`Pending claims: ${pendingClaims}`);
     }
 
-    sqlite.close();
-  });
-
-// ─── ingest ───
-program
-  .command("ingest")
-  .description("Create entities from external source")
-  .requiredOption("--from <source>", "Source adapter (e.g. linear)")
-  .requiredOption("--flow <name>", "Target flow name")
-  .option("--filter <query>", "Filter query (JSON)")
-  .option("--dry-run", "Show what would be ingested without creating entities")
-  .option("--db <path>", "Database path", DB_DEFAULT)
-  .action(async (opts) => {
-    const { db, sqlite } = openDb(opts.db);
-    const flowRepo = new DrizzleFlowRepository(db);
-    const entityRepo = new DrizzleEntityRepository(db);
-    const invocationRepo = new DrizzleInvocationRepository(db);
-    const gateRepo = new DrizzleGateRepository(db);
-    const integrationConfigRepo = new DrizzleIntegrationConfigRepository(db);
-    const transitionLogRepo = new DrizzleTransitionLogRepository(db);
-
-    // Verify flow exists
-    const flow = await flowRepo.getByName(opts.flow);
-    if (!flow) {
-      console.error(`Flow not found: ${opts.flow}`);
-      sqlite.close();
-      process.exit(1);
-    }
-
-    if (opts.from !== "linear") {
-      console.error(`Unsupported source: ${opts.from}. Supported: linear`);
-      sqlite.close();
-      process.exit(1);
-    }
-
-    // Get Linear config
-    const configs = await integrationConfigRepo.listAll();
-    const linearConfig = configs.find((c) => c.adapter === "linear");
-    let resolvedLinearConfig: Record<string, unknown> | null;
-    try {
-      resolvedLinearConfig = resolveConfigSecrets((linearConfig?.config as Record<string, unknown>) ?? null);
-    } catch (err) {
-      sqlite.close();
-      console.error("Failed to resolve config secrets:", err instanceof Error ? err.message : String(err));
-      process.exit(1);
-    }
-    const apiKey = (resolvedLinearConfig as { apiKey?: string } | null)?.apiKey ?? process.env.LINEAR_API_KEY;
-
-    if (!apiKey) {
-      console.error("No Linear API key found. Set LINEAR_API_KEY or configure via integration_config.");
-      sqlite.close();
-      process.exit(1);
-    }
-
-    const teamId = (resolvedLinearConfig as { teamId?: string } | null)?.teamId;
-    const adapter = new LinearAdapter({ apiKey, teamId });
-
-    // Parse filter
-    let filter: Record<string, unknown> = {};
-    if (opts.filter) {
-      try {
-        filter = JSON.parse(opts.filter);
-      } catch {
-        console.error("Invalid --filter JSON");
-        sqlite.close();
-        process.exit(1);
-      }
-    }
-
-    const issues = await adapter.list(filter);
-    console.log(`Found ${issues.length} issues from Linear`);
-
-    if (opts.dryRun) {
-      for (const issue of issues) {
-        const key = issue.key ?? issue.id;
-        console.log(`  [dry-run] Would create entity: ${key} — ${issue.title}`);
-      }
-      sqlite.close();
-      return;
-    }
-
-    const eventEmitter = new CompositeEventBusAdapter([new StdoutAdapter()]);
-
-    const engine = new Engine({
-      entityRepo,
-      flowRepo,
-      invocationRepo,
-      gateRepo,
-      transitionLogRepo,
-      adapters: new Map(),
-      eventEmitter,
-    });
-
-    let created = 0;
-    for (const issue of issues) {
-      const key = issue.key ?? issue.id;
-      const refs: Record<string, { adapter: string; id: string; [key: string]: unknown }> = {
-        issue: {
-          adapter: "linear",
-          id: String(issue.id),
-          key: String(key),
-          title: String(issue.title),
-          url: String(issue.url ?? ""),
-        },
-      };
-      await engine.createEntity(opts.flow, refs);
-      created++;
-      console.log(`  Created entity for ${key}: ${issue.title}`);
-    }
-
-    console.log(`Ingested ${created} entities into flow "${opts.flow}"`);
     sqlite.close();
   });
 

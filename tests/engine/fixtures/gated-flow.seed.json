@@ -37,6 +37,5 @@
       "trigger": "approve",
       "priority": 0
     }
-  ],
-  "integrations": []
+  ]
 }

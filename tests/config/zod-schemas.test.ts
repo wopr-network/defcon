@@ -4,7 +4,6 @@ import {
   StateDefinitionSchema,
   GateDefinitionSchema,
   TransitionRuleSchema,
-  IntegrationConfigSchema,
   SeedFileSchema,
 } from "../../src/config/zod-schemas.js";
 
@@ -222,26 +221,6 @@ describe("TransitionRuleSchema", () => {
       condition: "{{gt count 0}}",
     });
     expect(result.success).toBe(true);
-  });
-});
-
-// ─── IntegrationConfigSchema ───
-
-describe("IntegrationConfigSchema", () => {
-  it("accepts a valid integration", () => {
-    const result = IntegrationConfigSchema.safeParse({
-      capability: "notifications",
-      adapter: "discord",
-      config: { webhookUrl: "https://discord.com/api/webhooks/..." },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects missing adapter", () => {
-    const result = IntegrationConfigSchema.safeParse({
-      capability: "notifications",
-    });
-    expect(result.success).toBe(false);
   });
 });
 
@@ -484,26 +463,6 @@ describe("SeedFileSchema", () => {
     }
   });
 
-  it("rejects duplicate integration capabilities", () => {
-    const seed = {
-      flows: [{ name: "pr-review", initialState: "open" }],
-      states: [{ name: "open", flowName: "pr-review" }],
-      transitions: [
-        { flowName: "pr-review", fromState: "open", toState: "open", trigger: "loop" },
-      ],
-      integrations: [
-        { capability: "notifications", adapter: "discord" },
-        { capability: "notifications", adapter: "slack" }, // duplicate capability
-      ],
-    };
-    const result = SeedFileSchema.safeParse(seed);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const messages = result.error.issues.map((i) => i.message);
-      expect(messages.some((m) => m.toLowerCase().includes("duplicate") && m.includes("notifications"))).toBe(true);
-    }
-  });
-
   it("rejects duplicate state names within a flow", () => {
     const seed = {
       flows: [
@@ -529,7 +488,7 @@ describe("SeedFileSchema", () => {
     }
   });
 
-  it("defaults gates and integrations to empty arrays", () => {
+  it("defaults gates to empty array", () => {
     const seed = {
       flows: [{ name: "simple", initialState: "start" }],
       states: [{ name: "start", flowName: "simple" }],
@@ -541,7 +500,6 @@ describe("SeedFileSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.gates).toEqual([]);
-      expect(result.data.integrations).toEqual([]);
     }
   });
 
@@ -616,6 +574,11 @@ describe("SeedFileSchema", () => {
       const messages = result.error.issues.map((i) => i.message);
       expect(messages.some((m) => m.toLowerCase().includes("circular"))).toBe(true);
     }
+  });
+
+  it("rejects seed files with unknown keys (strict mode)", () => {
+    const result = SeedFileSchema.safeParse({ flows: [], gates: [], integrations: [] });
+    expect(result.success).toBe(false);
   });
 
   it("accepts acyclic spawn chains (A spawns B, B spawns C, no cycle)", () => {

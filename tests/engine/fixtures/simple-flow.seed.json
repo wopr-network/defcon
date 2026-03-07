@@ -23,6 +23,5 @@
   "transitions": [
     { "flowName": "simple-pipeline", "fromState": "backlog", "toState": "coding", "trigger": "assigned", "priority": 0 },
     { "flowName": "simple-pipeline", "fromState": "coding", "toState": "done", "trigger": "completed", "priority": 0 }
-  ],
-  "integrations": []
+  ]
 }

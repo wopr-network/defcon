@@ -325,19 +325,6 @@ export interface IEventRepository {
   emitDefinitionChanged(flowId: string | null, tool: string, payload: Record<string, unknown>): Promise<void>;
 }
 
-/** Integration config entry */
-export interface IntegrationConfig {
-  capability: string;
-  adapter: string;
-  config: Record<string, unknown> | null;
-}
-
-/** Data-access contract for integration adapter configuration. */
-export interface IIntegrationRepository {
-  /** Set or update an integration adapter for a capability (upsert). */
-  set(capability: string, adapter: string, config?: Record<string, unknown>): Promise<IntegrationConfig>;
-}
-
 /** Data-access contract for gate definitions and result recording. */
 export interface IGateRepository {
   /** Create a new gate definition. */
@@ -363,28 +350,4 @@ export interface IGateRepository {
     id: string,
     changes: Partial<Pick<Gate, "command" | "functionRef" | "apiConfig" | "timeoutMs">>,
   ): Promise<Gate>;
-}
-
-/** An integration config entry */
-export interface IntegrationConfig {
-  id: string;
-  capability: string;
-  adapter: string;
-  config: Record<string, unknown> | null;
-}
-
-/** Input for creating an integration config entry */
-export interface CreateIntegrationConfigInput {
-  capability: string;
-  adapter: string;
-  config?: Record<string, unknown>;
-}
-
-/** Data-access contract for integration configuration. */
-export interface IIntegrationConfigRepository {
-  /** Insert a new integration config entry. */
-  create(input: CreateIntegrationConfigInput): Promise<IntegrationConfig>;
-
-  /** List all integration config entries. */
-  listAll(): Promise<IntegrationConfig[]>;
 }

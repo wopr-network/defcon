@@ -122,9 +122,3 @@ export const AdminFlowRestoreSchema = z.object({
   flow_name: z.string().min(1),
   version: z.number().int().min(1),
 });
-
-export const AdminIntegrationSetSchema = z.object({
-  capability: z.string().min(1),
-  adapter: z.string().min(1),
-  config: z.record(z.string(), z.unknown()).optional(),
-});

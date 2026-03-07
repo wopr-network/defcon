@@ -19,10 +19,6 @@ describe("schema tables exist", () => {
     expect(schema.gateDefinitions).toBeDefined();
   });
 
-  it("exports integrationConfig table", () => {
-    expect(schema.integrationConfig).toBeDefined();
-  });
-
   it("exports flowVersions table", () => {
     expect(schema.flowVersions).toBeDefined();
   });
@@ -67,7 +63,7 @@ describe("migration", () => {
     expect(tableNames).toContain("flow_definitions");
     expect(tableNames).toContain("entities");
     expect(tableNames).toContain("events");
-    expect(tableNames.length).toBeGreaterThanOrEqual(11);
+    expect(tableNames.length).toBeGreaterThanOrEqual(10);
     sqlite.close();
   });
 });

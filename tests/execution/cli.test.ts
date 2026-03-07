@@ -172,14 +172,6 @@ describe("CLI", () => {
     }
   }, 15000);
 
-  it("run --help shows run options", () => {
-    const output = run(["run", "--help"]);
-    expect(output).toContain("--flow");
-    expect(output).toContain("--once");
-    expect(output).toContain("--poll-interval");
-    expect(output).toContain("--db");
-  });
-
   it("status --help shows status options", () => {
     const output = run(["status", "--help"]);
     expect(output).toContain("--flow");
@@ -207,13 +199,6 @@ describe("CLI", () => {
     if (existsSync(dbPath)) rmSync(dbPath);
   }, 15000);
 
-  it("ingest --help shows ingest options", () => {
-    const output = run(["ingest", "--help"]);
-    expect(output).toContain("--from");
-    expect(output).toContain("--flow");
-    expect(output).toContain("--filter");
-    expect(output).toContain("--dry-run");
-  });
 });
 
 describe("resolveSessionId", () => {
@@ -276,17 +261,4 @@ describe("CLI validation", () => {
     if (existsSync(dbPath)) rmSync(dbPath);
   });
 
-  it("run rejects non-numeric --reaper-interval", () => {
-    const dbPath = join(tmpdir(), `cli-run-nan-${Date.now()}.db`);
-    const output = runExpectFail(["run", "--reaper-interval", "abc"], { AGENTIC_DB_PATH: dbPath });
-    expect(output).toMatch(/reaper-interval/i);
-    if (existsSync(dbPath)) rmSync(dbPath);
-  });
-
-  it("run rejects --claim-ttl below 5000", () => {
-    const dbPath = join(tmpdir(), `cli-run-ttl-${Date.now()}.db`);
-    const output = runExpectFail(["run", "--claim-ttl", "100"], { AGENTIC_DB_PATH: dbPath });
-    expect(output).toMatch(/claim-ttl/i);
-    if (existsSync(dbPath)) rmSync(dbPath);
-  });
 });

@@ -8,7 +8,6 @@ import { DrizzleFlowRepository } from "../src/repositories/drizzle/flow.repo.js"
 import { DrizzleGateRepository } from "../src/repositories/drizzle/gate.repo.js";
 import { DrizzleEntityRepository } from "../src/repositories/drizzle/entity.repo.js";
 import { DrizzleEventRepository } from "../src/repositories/drizzle/event.repo.js";
-import { DrizzleIntegrationRepository } from "../src/repositories/drizzle/integration.repo.js";
 import { DrizzleInvocationRepository } from "../src/repositories/drizzle/invocation.repo.js";
 import { callToolHandler } from "../src/execution/mcp-server.js";
 import type { McpServerDeps } from "../src/execution/mcp-server.js";
@@ -48,7 +47,6 @@ describe("admin MCP tools", () => {
       gates: new DrizzleGateRepository(db as any),
       transitions: makeTransitionRepo(),
       eventRepo: new DrizzleEventRepository(db as any),
-      integrationRepo: new DrizzleIntegrationRepository(db as any),
     };
   });
 
@@ -207,27 +205,6 @@ describe("admin MCP tools", () => {
     // Verify the flow no longer has the "review" state
     const flow = await deps.flows.getByName("test-flow");
     expect(flow?.states.map((s) => s.name)).toEqual(["open"]);
-  });
-
-  it("admin.integration.set upserts integration config", async () => {
-    const result = await callToolHandler(deps, "admin.integration.set", {
-      capability: "issue-tracker",
-      adapter: "linear",
-      config: { apiKey: "test" },
-    });
-    expect(result.isError).toBeUndefined();
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.capability).toBe("issue-tracker");
-
-    // Upsert with new adapter
-    const result2 = await callToolHandler(deps, "admin.integration.set", {
-      capability: "issue-tracker",
-      adapter: "jira",
-      config: { url: "https://jira.example.com" },
-    });
-    expect(result2.isError).toBeUndefined();
-    const parsed2 = JSON.parse(result2.content[0].text);
-    expect(parsed2.adapter).toBe("jira");
   });
 
   it("mutations auto-snapshot before modifying existing flow", async () => {
