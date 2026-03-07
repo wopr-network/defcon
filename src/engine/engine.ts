@@ -404,7 +404,7 @@ export class Engine {
 
       // No pre-existing unclaimed invocations — claim entity directly and create invocation
       // Discipline filtering already happened at the flow level; any state with a prompt template is claimable
-      const claimableStates = flow.states.filter((s) => s.promptTemplate !== null);
+      const claimableStates = flow.states.filter((s) => !!s.promptTemplate);
       for (const state of claimableStates) {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
         if (claimed) {

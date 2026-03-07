@@ -36,6 +36,7 @@ describe("FlowDefinitionSchema", () => {
     const result = FlowDefinitionSchema.safeParse({
       name: "",
       initialState: "open",
+      discipline: "engineering",
     });
     expect(result.success).toBe(false);
   });
@@ -43,6 +44,7 @@ describe("FlowDefinitionSchema", () => {
   it("rejects missing initialState", () => {
     const result = FlowDefinitionSchema.safeParse({
       name: "pr-review",
+      discipline: "engineering",
     });
     expect(result.success).toBe(false);
   });
@@ -51,6 +53,7 @@ describe("FlowDefinitionSchema", () => {
     const result = FlowDefinitionSchema.safeParse({
       name: "pr-review",
       initialState: "open",
+      discipline: "engineering",
       maxConcurrent: -1,
     });
     expect(result.success).toBe(false);

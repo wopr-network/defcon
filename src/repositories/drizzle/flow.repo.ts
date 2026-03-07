@@ -262,6 +262,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       createdBy: flow.createdBy,
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,
+      discipline: flow.discipline,
       states: flow.states,
       transitions: flow.transitions,
     };
@@ -315,6 +316,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       affinityWindowMs: number;
       version: number;
       createdBy: string | null;
+      discipline: string | null;
       states: State[];
       transitions: Transition[];
     };
@@ -366,6 +368,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
           affinityWindowMs: snap.affinityWindowMs,
           version: snap.version,
           createdBy: snap.createdBy,
+          discipline: snap.discipline,
           updatedAt: Date.now(),
         })
         .where(eq(flowDefinitions.id, flowId))
