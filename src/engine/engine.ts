@@ -273,7 +273,10 @@ export class Engine {
         const claimed = await this.entityRepo.claim(flow.id, pending.stage, `agent:${role}`);
         if (claimed) {
           const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
-          if (!claimedInvocation) continue;
+          if (!claimedInvocation) {
+            await this.entityRepo.release(claimed.id);
+            continue;
+          }
 
           const state = flow.states.find((s) => s.name === pending.stage);
           let build: { prompt: string; context: Record<string, unknown> | null };
