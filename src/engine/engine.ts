@@ -392,162 +392,125 @@ export class Engine {
     }
 
     for (const flow of flows) {
-      const affinityWindow = flow.affinityWindowMs ?? 300000;
-
       // Try affinity match first if workerId provided
       if (workerId) {
         const affinityUnclaimed = await this.invocationRepo.findUnclaimedWithAffinity(flow.id, role, workerId);
         for (const pending of affinityUnclaimed) {
           const claimed = await this.entityRepo.claimById(pending.entityId, `agent:${role}`);
-          if (claimed) {
-            const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
-            if (!claimedInvocation) {
-              try {
-                await this.entityRepo.release(claimed.id, `agent:${role}`);
-              } catch (err) {
-                console.error(`release() failed for entity ${claimed.id}:`, err);
-              }
-              continue;
-            }
-
-            try {
-              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
-            } catch (err) {
-              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
-            }
-
-            const state = flow.states.find((s) => s.name === pending.stage);
-            let build: { prompt: string; context: Record<string, unknown> | null };
-            if (state) {
-              const [invocations, gateResults] = await Promise.all([
-                this.invocationRepo.findByEntity(claimed.id),
-                this.gateRepo.resultsFor(claimed.id),
-              ]);
-              const enriched: EnrichedEntity = { ...claimed, invocations, gateResults };
-              build = await buildInvocation(state, enriched, this.adapters, flow);
-            } else {
-              build = { prompt: pending.prompt, context: null };
-            }
-
-            await this.eventEmitter.emit({
-              type: "entity.claimed",
-              entityId: claimed.id,
-              flowId: flow.id,
-              agentId: `agent:${role}`,
-              emittedAt: new Date(),
-            });
-            return {
-              entityId: claimed.id,
-              invocationId: claimedInvocation.id,
-              prompt: build.prompt,
-              context: build.context,
-            };
-          }
+          if (!claimed) continue;
+          const result = await this.tryClaimInvocation(pending, claimed, flow, role, workerId);
+          if (result) return result;
         }
       }
 
       // Prefer claiming an existing unclaimed invocation created by processSignal
       // to avoid creating a duplicate. Fall back to creating a new one if none exist.
       const unclaimed = await this.invocationRepo.findUnclaimedByFlow(flow.id);
-
       for (const pending of unclaimed) {
         const claimed = await this.entityRepo.claim(flow.id, pending.stage, `agent:${role}`);
-        if (claimed) {
-          const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
-          if (!claimedInvocation) {
-            try {
-              await this.entityRepo.release(claimed.id, `agent:${role}`);
-            } catch (err) {
-              console.error(`release() failed for entity ${claimed.id}:`, err);
-            }
-            continue;
-          }
-
-          if (workerId) {
-            try {
-              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
-            } catch (err) {
-              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
-            }
-          }
-
-          const state = flow.states.find((s) => s.name === pending.stage);
-          let build: { prompt: string; context: Record<string, unknown> | null };
-          if (state) {
-            const [invocations, gateResults] = await Promise.all([
-              this.invocationRepo.findByEntity(claimed.id),
-              this.gateRepo.resultsFor(claimed.id),
-            ]);
-            const enriched: EnrichedEntity = { ...claimed, invocations, gateResults };
-            build = await buildInvocation(state, enriched, this.adapters, flow);
-          } else {
-            build = { prompt: pending.prompt, context: null };
-          }
-
-          await this.eventEmitter.emit({
-            type: "entity.claimed",
-            entityId: claimed.id,
-            flowId: flow.id,
-            agentId: `agent:${role}`,
-            emittedAt: new Date(),
-          });
-          return {
-            entityId: claimed.id,
-            invocationId: claimedInvocation.id,
-            prompt: build.prompt,
-            context: build.context,
-          };
-        }
+        if (!claimed) continue;
+        const result = await this.tryClaimInvocation(pending, claimed, flow, role, workerId);
+        if (result) return result;
       }
 
       // No pre-existing unclaimed invocations — claim entity directly and create invocation
-      // Discipline filtering already happened at the flow level; any state with a prompt template is claimable
       const claimableStates = flow.states.filter((s) => !!s.promptTemplate);
       for (const state of claimableStates) {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
-        if (claimed) {
-          if (workerId) {
-            try {
-              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
-            } catch (err) {
-              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
-            }
-          }
+        if (!claimed) continue;
 
-          const [invocations, gateResults] = await Promise.all([
-            this.invocationRepo.findByEntity(claimed.id),
-            this.gateRepo.resultsFor(claimed.id),
-          ]);
-          const enriched: EnrichedEntity = { ...claimed, invocations, gateResults };
-          const build = await buildInvocation(state, enriched, this.adapters, flow);
-          const invocation = await this.invocationRepo.create(
-            claimed.id,
-            state.name,
-            build.prompt,
-            build.mode,
-            undefined,
-            build.systemPrompt || build.userContent
-              ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
-              : undefined,
-          );
-          await this.eventEmitter.emit({
-            type: "entity.claimed",
-            entityId: claimed.id,
-            flowId: flow.id,
-            agentId: `agent:${role}`,
-            emittedAt: new Date(),
-          });
-          return {
-            entityId: claimed.id,
-            invocationId: invocation.id,
-            prompt: build.prompt,
-            context: build.context,
-          };
-        }
+        await this.setAffinityIfNeeded(claimed.id, flow, role, workerId);
+        const build = await this.buildPrompt(state, claimed, flow);
+        const invocation = await this.invocationRepo.create(
+          claimed.id,
+          state.name,
+          build.prompt,
+          build.mode,
+          undefined,
+          build.systemPrompt || build.userContent
+            ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
+            : undefined,
+        );
+        return this.emitAndReturn(claimed, invocation.id, build, flow, role);
       }
     }
 
     return null;
+  }
+
+  /**
+   * Try to claim an existing unclaimed invocation for an already-claimed entity.
+   * Handles the race condition where another worker claims the invocation first
+   * (releases the entity claim and returns null so the caller can try the next candidate).
+   */
+  private async tryClaimInvocation(
+    pending: { id: string; entityId: string; stage: string; prompt: string },
+    claimed: Entity,
+    flow: Flow,
+    role: string,
+    workerId?: string,
+  ): Promise<ClaimWorkResult | null> {
+    const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
+    if (!claimedInvocation) {
+      try {
+        await this.entityRepo.release(claimed.id, `agent:${role}`);
+      } catch (err) {
+        console.error(`release() failed for entity ${claimed.id}:`, err);
+      }
+      return null;
+    }
+
+    await this.setAffinityIfNeeded(claimed.id, flow, role, workerId);
+
+    const state = flow.states.find((s) => s.name === pending.stage);
+    const build = state ? await this.buildPrompt(state, claimed, flow) : { prompt: pending.prompt, context: null };
+
+    return this.emitAndReturn(claimed, claimedInvocation.id, build, flow, role);
+  }
+
+  private async setAffinityIfNeeded(entityId: string, flow: Flow, role: string, workerId?: string): Promise<void> {
+    if (!workerId) return;
+    const affinityWindow = flow.affinityWindowMs ?? 300000;
+    try {
+      await this.entityRepo.setAffinity(entityId, workerId, role, new Date(Date.now() + affinityWindow));
+    } catch (err) {
+      console.warn(`setAffinity failed for entity ${entityId} worker ${workerId} — continuing:`, err);
+    }
+  }
+
+  private async buildPrompt(
+    state: Flow["states"][number],
+    entity: Entity,
+    flow: Flow,
+  ): Promise<Awaited<ReturnType<typeof buildInvocation>>> {
+    const [invocations, gateResults] = await Promise.all([
+      this.invocationRepo.findByEntity(entity.id),
+      this.gateRepo.resultsFor(entity.id),
+    ]);
+    const enriched: EnrichedEntity = { ...entity, invocations, gateResults };
+    return buildInvocation(state, enriched, this.adapters, flow);
+  }
+
+  private async emitAndReturn(
+    entity: Entity,
+    invocationId: string,
+    build: { prompt: string; context: Record<string, unknown> | null },
+    flow: Flow,
+    role: string,
+  ): Promise<ClaimWorkResult> {
+    await this.eventEmitter.emit({
+      type: "entity.claimed",
+      entityId: entity.id,
+      flowId: flow.id,
+      agentId: `agent:${role}`,
+      emittedAt: new Date(),
+    });
+    return {
+      entityId: entity.id,
+      invocationId,
+      prompt: build.prompt,
+      context: build.context,
+    };
   }
 
   async getStatus(): Promise<EngineStatus> {
