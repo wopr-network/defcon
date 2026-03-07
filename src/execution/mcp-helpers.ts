@@ -49,6 +49,9 @@ export function emitDefinitionChanged(
   flowId: string | null,
   tool: string,
   payload: Record<string, unknown>,
+  logger?: { error: (...args: unknown[]) => void },
 ) {
-  void eventRepo.emitDefinitionChanged(flowId, tool, payload);
+  eventRepo.emitDefinitionChanged(flowId, tool, payload).catch((err) => {
+    logger?.error("[mcp] emitDefinitionChanged error:", err);
+  });
 }

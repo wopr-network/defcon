@@ -128,6 +128,7 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
         entity_id: req.params.id,
         signal: req.body?.signal as string,
       };
+      if (req.body?.worker_id) args.worker_id = req.body.worker_id as string;
       if (req.body?.artifacts) args.artifacts = req.body.artifacts;
       const result = await callToolHandler(deps.mcpDeps, "flow.report", args);
       return mcpResultToApi(result);
