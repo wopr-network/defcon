@@ -9,14 +9,12 @@ import { getHandlebars, validateTemplate } from "../../src/engine/handlebars.js"
 describe("Handlebars sandbox", () => {
   it("blocks prototype access via __proto__", () => {
     const hbs = getHandlebars();
-    const tpl = hbs.compile("{{__proto__.constructor}}");
-    expect(() => tpl({ name: "test" })).toThrow();
+    expect(() => hbs.compile("{{__proto__.constructor}}")).toThrow();
   });
 
   it("blocks constructor access", () => {
     const hbs = getHandlebars();
-    const tpl = hbs.compile("{{constructor.name}}");
-    expect(() => tpl({ name: "test" })).toThrow();
+    expect(() => hbs.compile("{{constructor.name}}")).toThrow();
   });
 
   it("throws on missing variables in strict mode", () => {
