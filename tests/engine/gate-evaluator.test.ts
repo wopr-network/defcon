@@ -8,6 +8,7 @@ vi.mock("../../src/engine/gate-command-validator.js", () => ({
     // This preserves the TOCTOU fix (resolvedPath flows to runCommand) while keeping tests hermetic.
     const binaryMap: Record<string, string> = {
       "echo ok": "/usr/bin/echo",
+      "echo ent-1": "/usr/bin/echo",
       "exit 1": "/bin/sh",
       "sleep 10": "/usr/bin/sleep",
     };
@@ -331,6 +332,22 @@ describe("evaluateGate", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("renders Handlebars templates in command gate before execution", async () => {
+    const gate = makeGate({ type: "command", command: "echo {{id}}" });
+    const entity = makeEntity({ id: "ent-1" });
+    const gateRepo: Pick<IGateRepository, "record"> = {
+      record: vi.fn().mockResolvedValue({
+        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
+        passed: true, output: "ent-1", evaluatedAt: new Date(),
+      }),
+    };
+
+    const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
+    expect(result.passed).toBe(true);
+    // output should be the rendered entity id, not the literal template string
+    expect(result.output).toBe("ent-1");
   });
 
   it("throws for unknown gate types", async () => {
