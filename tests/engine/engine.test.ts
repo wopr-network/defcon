@@ -433,7 +433,7 @@ describe("Engine", () => {
       // Should return null since no work was successfully claimed
       expect(result).toBeNull();
       // Entity claim should have been released
-      expect(mocks.entityRepo.release).toHaveBeenCalledWith(claimedEntity.id);
+      expect(mocks.entityRepo.release).toHaveBeenCalledWith(claimedEntity.id, 'agent:coder');
     });
   });
 
