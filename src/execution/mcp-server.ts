@@ -434,13 +434,17 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
   const { role, flow: flowName, worker_id: workerId } = v.data;
 
   let candidates: import("../repositories/interfaces.js").Invocation[] = [];
+  let affinityCandidatesUsed = false;
+  let flowForFallback: Awaited<ReturnType<typeof deps.flows.getByName>> | null = null;
 
   if (flowName) {
     const flow = await deps.flows.getByName(flowName);
     if (!flow) return errorResult(`Flow not found: ${flowName}`);
+    flowForFallback = flow;
     // Try affinity-matched candidates first if workerId is provided
     if (workerId) {
       candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
+      if (candidates.length > 0) affinityCandidatesUsed = true;
     }
     if (candidates.length === 0) {
       candidates = await deps.invocations.findUnclaimed(flow.id, role);
@@ -452,6 +456,10 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
       candidates = [];
       if (workerId) {
         candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
+        if (candidates.length > 0) {
+          affinityCandidatesUsed = true;
+          flowForFallback = flow;
+        }
       }
       if (candidates.length === 0) {
         const unclaimed = await deps.invocations.findUnclaimed(flow.id, role);
@@ -488,6 +496,36 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
         prompt: claimed.prompt,
         context: claimed.context,
       });
+    }
+  }
+
+  // All affinity candidates lost the claim race — fall back to open pool
+  if (affinityCandidatesUsed) {
+    const openPool = flowForFallback ? await deps.invocations.findUnclaimed(flowForFallback.id, role) : [];
+    for (const invocation of openPool) {
+      let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
+      try {
+        claimed = await deps.invocations.claim(invocation.id, role);
+      } catch (err) {
+        console.error(`Failed to claim invocation ${invocation.id}:`, err);
+        continue;
+      }
+      if (claimed) {
+        if (workerId) {
+          const entity = await deps.entities.get(claimed.entityId);
+          if (entity) {
+            const flow = await deps.flows.get(entity.flowId);
+            const windowMs = flow?.affinityWindowMs ?? 300000;
+            await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+          }
+        }
+        return jsonResult({
+          entity_id: claimed.entityId,
+          invocation_id: claimed.id,
+          prompt: claimed.prompt,
+          context: claimed.context,
+        });
+      }
     }
   }
 
