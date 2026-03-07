@@ -578,14 +578,53 @@ describe("Engine", () => {
   });
 
   describe("getStatus", () => {
-    it("returns flow/state counts", async () => {
+    it("returns entity counts per flow/state and invocation tallies", async () => {
       const mocks = makeMockRepos();
-      const engine = new Engine({ ...mocks, adapters: new Map() });
 
+      // Two entities in "open", one in "coding"
+      (mocks.entityRepo.findByFlowAndState as ReturnType<typeof vi.fn>)
+        .mockImplementation(async (_flowId: string, state: string) => {
+          if (state === "open") return [makeEntity(), makeEntity()];
+          if (state === "coding") return [makeEntity({ state: "coding" })];
+          return [];
+        });
+
+      // One active (claimed, not completed), one pending (unclaimed, not completed)
+      (mocks.invocationRepo.findByFlow as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "inv-1", entityId: "ent-1", stage: "open", agentRole: "planner",
+          mode: "active", prompt: "Plan", context: null,
+          claimedBy: "agent:planner", claimedAt: new Date(), startedAt: null,
+          completedAt: null, failedAt: null, signal: null, artifacts: null,
+          error: null, ttlMs: 1800000,
+        },
+        {
+          id: "inv-2", entityId: "ent-2", stage: "coding", agentRole: "coder",
+          mode: "active", prompt: "Code", context: null,
+          claimedBy: null, claimedAt: null, startedAt: null,
+          completedAt: null, failedAt: null, signal: null, artifacts: null,
+          error: null, ttlMs: 1800000,
+        },
+      ]);
+
+      const engine = new Engine({ ...mocks, adapters: new Map() });
       const status = await engine.getStatus();
 
-      expect(status).toHaveProperty("flows");
-      expect(status).toHaveProperty("activeInvocations");
+      expect(status.flows).toEqual({
+        "test-flow": { open: 2, coding: 1, done: 0 },
+      });
+      expect(status.activeInvocations).toBe(1);
+      expect(status.pendingClaims).toBe(1);
+    });
+
+    it("returns zeros when no flows exist", async () => {
+      const mocks = makeMockRepos();
+      (mocks.flowRepo.listAll as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      const engine = new Engine({ ...mocks, adapters: new Map() });
+      const status = await engine.getStatus();
+
+      expect(status).toEqual({ flows: {}, activeInvocations: 0, pendingClaims: 0 });
     });
   });
 
