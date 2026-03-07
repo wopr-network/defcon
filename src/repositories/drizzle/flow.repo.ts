@@ -28,7 +28,6 @@ function rowToState(r: typeof stateDefinitions.$inferSelect): State {
     id: r.id,
     flowId: r.flowId,
     name: r.name,
-    agentRole: r.agentRole ?? null,
     modelTier: r.modelTier ?? null,
     mode: (r.mode ?? "passive") as Mode,
     promptTemplate: r.promptTemplate ?? null,
@@ -163,7 +162,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       id,
       flowId,
       name: state.name,
-      agentRole: state.agentRole ?? null,
+      agentRole: null,
       modelTier: state.modelTier ?? null,
       mode: state.mode ?? "passive",
       promptTemplate: state.promptTemplate ?? null,
@@ -182,7 +181,6 @@ export class DrizzleFlowRepository implements IFlowRepository {
 
     const updateValues: Record<string, unknown> = {};
     if (changes.name !== undefined) updateValues.name = changes.name;
-    if (changes.agentRole !== undefined) updateValues.agentRole = changes.agentRole;
     if (changes.modelTier !== undefined) updateValues.modelTier = changes.modelTier;
     if (changes.mode !== undefined) updateValues.mode = changes.mode;
     if (changes.promptTemplate !== undefined) updateValues.promptTemplate = changes.promptTemplate;
@@ -331,7 +329,6 @@ export class DrizzleFlowRepository implements IFlowRepository {
             id: s.id,
             flowId,
             name: s.name,
-            agentRole: s.agentRole,
             modelTier: s.modelTier,
             mode: s.mode ?? "passive",
             promptTemplate: s.promptTemplate,

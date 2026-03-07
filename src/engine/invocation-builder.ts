@@ -5,7 +5,6 @@ export interface InvocationBuild {
   prompt: string;
   systemPrompt: string;
   userContent: string;
-  agentRole: string | null;
   mode: Mode;
   context: Record<string, unknown>;
 }
@@ -65,7 +64,6 @@ export async function buildInvocation(
     prompt,
     systemPrompt,
     userContent,
-    agentRole: state.agentRole,
     mode: state.mode,
     context,
   };

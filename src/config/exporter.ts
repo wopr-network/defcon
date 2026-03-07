@@ -41,13 +41,13 @@ export async function exportSeed(flowRepo: IFlowRepository, gateRepo: IGateRepos
     affinityWindowMs: f.affinityWindowMs,
     version: f.version,
     createdBy: f.createdBy ?? undefined,
+    discipline: f.discipline ?? "engineering",
   }));
 
   const seedStates: SeedFile["states"] = flows.flatMap((f) =>
     f.states.map((s) => ({
       name: s.name,
       flowName: f.name,
-      agentRole: s.agentRole ?? undefined,
       modelTier: s.modelTier ?? undefined,
       mode: s.mode,
       promptTemplate: s.promptTemplate ?? undefined,
