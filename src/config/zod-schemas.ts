@@ -17,6 +17,17 @@ export const FlowDefinitionSchema = z.object({
   discipline: z.string().min(1).optional(),
 });
 
+export const OnEnterSchema = z.object({
+  command: z
+    .string()
+    .min(1)
+    .refine((val) => validateTemplate(val), {
+      message: "onEnter command contains disallowed Handlebars expressions",
+    }),
+  artifacts: z.array(z.string().min(1)).min(1),
+  timeout_ms: z.number().int().min(0).optional().default(30000),
+});
+
 export const StateDefinitionSchema = z.object({
   name: z.string().min(1),
   flowName: z.string().min(1),
@@ -30,6 +41,7 @@ export const StateDefinitionSchema = z.object({
     })
     .optional(),
   constraints: z.record(z.string(), z.unknown()).optional(),
+  onEnter: OnEnterSchema.optional(),
 });
 
 // Gate: discriminated union on `type`

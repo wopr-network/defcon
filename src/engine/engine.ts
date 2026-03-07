@@ -13,6 +13,7 @@ import type { IEventBusAdapter } from "./event-types.js";
 import { executeSpawn } from "./flow-spawner.js";
 import { evaluateGate } from "./gate-evaluator.js";
 import { buildInvocation } from "./invocation-builder.js";
+import { executeOnEnter } from "./on-enter.js";
 import { findTransition, isTerminal } from "./state-machine.js";
 
 export interface ProcessSignalResult {
@@ -25,6 +26,7 @@ export interface ProcessSignalResult {
   gateName?: string;
   failurePrompt?: string;
   timeoutPrompt?: string;
+  onEnterFailed?: boolean;
   invocationId?: string;
   spawned?: string[];
   terminal: boolean;
@@ -175,8 +177,58 @@ export class Engine {
       terminal: false,
     };
 
-    // 7. Create invocation if new state has an agent role
+    // 6b. Execute onEnter hook if defined on the new state
     const newStateDef = flow.states.find((s) => s.name === transition.toState);
+    if (newStateDef?.onEnter) {
+      const onEnterResult = await executeOnEnter(newStateDef.onEnter, updated, this.entityRepo);
+      if (onEnterResult.skipped) {
+        await this.eventEmitter.emit({
+          type: "onEnter.skipped",
+          entityId,
+          state: transition.toState,
+          emittedAt: new Date(),
+        });
+      } else if (onEnterResult.error) {
+        await this.eventEmitter.emit({
+          type: "onEnter.failed",
+          entityId,
+          state: transition.toState,
+          error: onEnterResult.error,
+          emittedAt: new Date(),
+        });
+        await this.transitionLogRepo.record({
+          entityId,
+          fromState: entity.state,
+          toState: transition.toState,
+          trigger: signal,
+          invocationId: triggeringInvocationId ?? null,
+          timestamp: new Date(),
+        });
+        return {
+          newState: transition.toState,
+          gatesPassed,
+          gated: false,
+          onEnterFailed: true,
+          gateOutput: onEnterResult.error,
+          terminal: false,
+        };
+      } else {
+        await this.eventEmitter.emit({
+          type: "onEnter.completed",
+          entityId,
+          state: transition.toState,
+          artifacts: onEnterResult.artifacts ?? {},
+          emittedAt: new Date(),
+        });
+        // Refresh entity so invocation builder sees new artifacts
+        const refreshed = await this.entityRepo.get(entityId);
+        if (refreshed) {
+          updated = refreshed;
+        }
+      }
+    }
+
+    // 7. Create invocation if new state has an agent role
     if (newStateDef?.agentRole) {
       const canCreate = await this.checkConcurrency(flow, entity);
       if (canCreate) {
@@ -259,8 +311,36 @@ export class Engine {
       emittedAt: new Date(),
     });
 
-    // Create invocation if initial state has an agent role
+    // Execute onEnter hook if defined on initial state
     const initialState = flow.states.find((s) => s.name === flow.initialState);
+    if (initialState?.onEnter) {
+      const onEnterResult = await executeOnEnter(initialState.onEnter, entity, this.entityRepo);
+      if (onEnterResult.error) {
+        await this.eventEmitter.emit({
+          type: "onEnter.failed",
+          entityId: entity.id,
+          state: flow.initialState,
+          error: onEnterResult.error,
+          emittedAt: new Date(),
+        });
+        throw new Error(`onEnter failed for entity ${entity.id}: ${onEnterResult.error}`);
+      }
+      if (onEnterResult.artifacts) {
+        await this.eventEmitter.emit({
+          type: "onEnter.completed",
+          entityId: entity.id,
+          state: flow.initialState,
+          artifacts: onEnterResult.artifacts,
+          emittedAt: new Date(),
+        });
+        const refreshed = await this.entityRepo.get(entity.id);
+        if (refreshed) {
+          Object.assign(entity, refreshed);
+        }
+      }
+    }
+
+    // Create invocation if initial state has an agent role
     if (initialState?.agentRole) {
       const [invocations, gateResults] = await Promise.all([
         this.invocationRepo.findByEntity(entity.id),
