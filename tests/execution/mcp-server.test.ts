@@ -308,9 +308,9 @@ describe("MCP tool handlers", () => {
     return result;
   }
 
-  it("lists all 19 tools", async () => {
+  it("lists all 20 tools", async () => {
     const result = await listTools();
-    expect(result.tools).toHaveLength(19);
+    expect(result.tools).toHaveLength(20);
     const names = result.tools.map((t: { name: string }) => t.name).sort();
     expect(names).toEqual([
       "admin.entity.create",
@@ -331,6 +331,7 @@ describe("MCP tool handlers", () => {
       "query.entities",
       "query.entity",
       "query.flow",
+      "query.flows",
       "query.invocations",
     ]);
   });
@@ -445,6 +446,26 @@ describe("MCP tool handlers", () => {
   it("query.flow returns error for unknown flow", async () => {
     const result = await callTool("query.flow", { name: "nonexistent" });
     expect(result.isError).toBe(true);
+  });
+
+  it("query.flows returns all flow definitions", async () => {
+    const result = await callTool("query.flows", {});
+    const content = result.content as Array<{ type: string; text: string }>;
+    const data = JSON.parse(content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data).toHaveLength(1);
+    expect(data[0]).toHaveProperty("name", "test-flow");
+    expect(data[0]).toHaveProperty("states");
+    expect(data[0]).toHaveProperty("transitions");
+  });
+
+  it("query.flows returns empty array when no flows exist", async () => {
+    deps.flows.listAll = async () => [];
+    const result = await callTool("query.flows", {});
+    const content = result.content as Array<{ type: string; text: string }>;
+    const data = JSON.parse(content[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data).toHaveLength(0);
   });
 
   // Finding 1: flow.report completes the invocation before delegating to the engine

@@ -171,6 +171,15 @@ const TOOL_DEFINITIONS = [
       required: ["name"],
     },
   },
+  {
+    name: "query.flows",
+    description: "List all available flow definitions.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
   // ─── Admin Tools ───
   {
     name: "admin.flow.create",
@@ -444,6 +453,8 @@ export async function callToolHandler(
         return await handleQueryInvocations(deps, safeArgs);
       case "query.flow":
         return await handleQueryFlow(deps, safeArgs);
+      case "query.flows":
+        return await handleQueryFlows(deps);
       case "admin.flow.create":
         return await handleAdminFlowCreate(deps, safeArgs);
       case "admin.flow.update":
@@ -845,6 +856,11 @@ async function handleQueryFlow(deps: McpServerDeps, args: Record<string, unknown
   if (!flow) return errorResult(`Flow not found: ${name}`);
 
   return jsonResult(flow);
+}
+
+async function handleQueryFlows(deps: McpServerDeps) {
+  const flows = await deps.flows.listAll();
+  return jsonResult(flows);
 }
 
 async function handleAdminEntityCreate(deps: McpServerDeps, args: Record<string, unknown>) {
