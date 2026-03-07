@@ -1,0 +1,309 @@
+import { DEFAULT_TIMEOUT_PROMPT } from "../../engine/constants.js";
+import type { McpServerDeps } from "../mcp-server.js";
+import { errorResult, jsonResult, validateInput } from "../mcp-server.js";
+import { FlowClaimSchema, FlowFailSchema, FlowGetPromptSchema, FlowReportSchema } from "../tool-schemas.js";
+
+const AFFINITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RETRY_SHORT_MS = 30_000; // entities exist but all claimed
+const RETRY_LONG_MS = 300_000; // backlog empty
+
+function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jsonResult> {
+  return jsonResult({
+    next_action: "check_back",
+    retry_after_ms: retryAfterMs,
+    message: `No work available for role '${role}' right now. Call flow.claim again after the retry delay.`,
+  });
+}
+
+export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
+  const v = validateInput(FlowClaimSchema, args);
+  if (!v.ok) return v.result;
+  const { workerId, role, flow: flowName } = v.data;
+
+  // 1. Find candidate flows filtered by discipline
+  let candidateFlows: import("../../repositories/interfaces.js").Flow[] = [];
+
+  if (flowName) {
+    const flow = await deps.flows.getByName(flowName);
+    if (!flow) return errorResult(`Flow not found: ${flowName}`);
+    // Discipline must match — null discipline flows are claimable by any role
+    if (flow.discipline !== null && flow.discipline !== role) return noWorkResult(RETRY_LONG_MS, role);
+    candidateFlows = [flow];
+  } else {
+    const allFlows = await deps.flows.list();
+    candidateFlows = allFlows.filter((f) => f.discipline === null || f.discipline === role);
+  }
+
+  if (candidateFlows.length === 0) return noWorkResult(RETRY_LONG_MS, role);
+
+  // 2. Gather all unclaimed invocations across matching flows
+  type CandidateInvocation = import("../../repositories/interfaces.js").Invocation;
+  const allCandidates: CandidateInvocation[] = [];
+  for (const flow of candidateFlows) {
+    const unclaimed = await deps.invocations.findUnclaimedByFlow(flow.id);
+    allCandidates.push(...unclaimed);
+  }
+
+  if (allCandidates.length === 0) {
+    // Determine if entities exist but are all claimed (short retry) vs empty backlog (long retry).
+    // Use hasAnyInFlowAndState (SELECT 1 LIMIT 1) to avoid loading full entity rows across all states.
+    let hasEntities = false;
+    for (const flow of candidateFlows) {
+      const stateNames = flow.states.filter((s) => s.promptTemplate !== null).map((s) => s.name);
+      if (await deps.entities.hasAnyInFlowAndState(flow.id, stateNames)) {
+        hasEntities = true;
+        break;
+      }
+    }
+    return noWorkResult(hasEntities ? RETRY_SHORT_MS : RETRY_LONG_MS, role);
+  }
+
+  // 3. Load entities for priority sorting
+  const entityMap = new Map<string, import("../../repositories/interfaces.js").Entity>();
+  const uniqueEntityIds = [...new Set(allCandidates.map((inv) => inv.entityId))];
+  await Promise.all(
+    uniqueEntityIds.map(async (eid) => {
+      const entity = await deps.entities.get(eid);
+      if (entity) entityMap.set(eid, entity);
+    }),
+  );
+
+  // 4. Check affinity for each entity
+  const affinitySet = new Set<string>();
+  const now = Date.now();
+  if (workerId) {
+    await Promise.all(
+      uniqueEntityIds.map(async (eid) => {
+        const invocations = await deps.invocations.findByEntity(eid);
+        const lastCompleted = invocations
+          .filter((inv) => inv.completedAt !== null && inv.claimedBy === workerId)
+          .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
+        if (lastCompleted.length > 0) {
+          const elapsed = now - (lastCompleted[0].completedAt?.getTime() ?? 0);
+          if (elapsed < AFFINITY_WINDOW_MS) {
+            affinitySet.add(eid);
+          }
+        }
+      }),
+    );
+  }
+
+  // 5. Sort candidates by priority algorithm
+  allCandidates.sort((a, b) => {
+    const entityA = entityMap.get(a.entityId);
+    const entityB = entityMap.get(b.entityId);
+
+    // Tier 1: Affinity (has affinity sorts first)
+    const affinityA = affinitySet.has(a.entityId) ? 1 : 0;
+    const affinityB = affinitySet.has(b.entityId) ? 1 : 0;
+    if (affinityA !== affinityB) return affinityB - affinityA;
+
+    // Tier 2: Entity priority (higher priority sorts first)
+    const priA = entityA?.priority ?? 0;
+    const priB = entityB?.priority ?? 0;
+    if (priA !== priB) return priB - priA;
+
+    // Tier 3: Time in state (longest waiting sorts first — earlier createdAt as stable proxy)
+    const timeA = entityA?.createdAt?.getTime() ?? now;
+    const timeB = entityB?.createdAt?.getTime() ?? now;
+    return timeA - timeB;
+  });
+
+  // 6. Build a flow lookup map
+  const flowById = new Map(candidateFlows.map((f) => [f.id, f]));
+
+  // 7. Try claiming in priority order (handle race conditions)
+  for (const invocation of allCandidates) {
+    let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
+    try {
+      claimed = await deps.invocations.claim(invocation.id, workerId ?? `agent:${role}`);
+    } catch (err) {
+      console.error(`Failed to claim invocation ${invocation.id}:`, err);
+      continue;
+    }
+    if (claimed) {
+      const entity = entityMap.get(claimed.entityId);
+      if (entity) {
+        const claimedEntity = await deps.entities.claimById(entity.id, workerId ?? `agent:${role}`);
+        if (!claimedEntity) {
+          // Race condition: another worker claimed this entity first.
+          // Release the invocation claim so it can be picked up by another worker.
+          await deps.invocations.releaseClaim(claimed.id);
+          continue;
+        }
+      }
+      const flow = entity ? flowById.get(entity.flowId) : undefined;
+      // Record affinity for the claiming worker
+      if (workerId && entity && flow) {
+        const windowMs = flow.affinityWindowMs ?? 300000;
+        await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+      }
+      return jsonResult({
+        workerId,
+        entity_id: claimed.entityId,
+        invocation_id: claimed.id,
+        flow: flow?.name ?? null,
+        stage: claimed.stage,
+        prompt: claimed.prompt,
+        context: claimed.context,
+      });
+    }
+  }
+
+  return noWorkResult(RETRY_SHORT_MS, role);
+}
+
+export async function handleFlowGetPrompt(deps: McpServerDeps, args: Record<string, unknown>) {
+  const v = validateInput(FlowGetPromptSchema, args);
+  if (!v.ok) return v.result;
+  const { entity_id: entityId } = v.data;
+
+  const entity = await deps.entities.get(entityId);
+  if (!entity) return errorResult(`Entity not found: ${entityId}`);
+
+  const invocationList = await deps.invocations.findByEntity(entityId);
+  if (invocationList.length === 0) {
+    return errorResult(`No invocations found for entity: ${entityId}`);
+  }
+
+  // Return the active (claimed, not completed) invocation rather than the last by insertion order
+  const active =
+    invocationList.find((inv) => inv.claimedAt !== null && inv.completedAt === null && inv.failedAt === null) ??
+    invocationList[invocationList.length - 1];
+
+  return jsonResult({
+    prompt: active.prompt,
+    context: active.context,
+  });
+}
+
+export async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknown>) {
+  const v = validateInput(FlowReportSchema, args);
+  if (!v.ok) return v.result;
+  const { entity_id: entityId, signal, artifacts, worker_id: workerId } = v.data;
+
+  const invocationList = await deps.invocations.findByEntity(entityId);
+  const activeInvocation = invocationList.find(
+    (inv) => inv.claimedAt !== null && inv.completedAt === null && inv.failedAt === null,
+  );
+  if (!activeInvocation) {
+    return errorResult(`No active invocation found for entity: ${entityId}`);
+  }
+
+  if (!deps.engine) {
+    return errorResult("Engine not available — MCP server started without engine dependency");
+  }
+
+  // Complete the current invocation BEFORE calling processSignal so the
+  // concurrency check inside the engine doesn't count it as still-active.
+  await deps.invocations.complete(activeInvocation.id, signal, artifacts);
+
+  // Delegate to the engine — it handles gate evaluation, transition, event
+  // emission, invocation creation, concurrency checks, and spawn logic.
+  let result: Awaited<ReturnType<typeof deps.engine.processSignal>>;
+  try {
+    result = await deps.engine.processSignal(entityId, signal, artifacts, activeInvocation.id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // processSignal failed after we already completed the invocation — create a
+    // replacement so the entity can be reclaimed rather than being permanently orphaned.
+    await deps.invocations.create(
+      entityId,
+      activeInvocation.stage,
+      activeInvocation.prompt,
+      activeInvocation.mode,
+      undefined,
+      activeInvocation.context ?? undefined,
+    );
+    return errorResult(message);
+  }
+
+  // Set affinity on completion for passive-mode invocations, after processSignal succeeds
+  if (workerId && activeInvocation.mode === "passive") {
+    try {
+      const entity = await deps.entities.get(entityId);
+      if (entity) {
+        const flow = await deps.flows.get(entity.flowId);
+        const windowMs = flow?.affinityWindowMs ?? 300000;
+        const affinityRole = flow?.discipline;
+        if (affinityRole) {
+          await deps.entities.setAffinity(entityId, workerId, affinityRole, new Date(Date.now() + windowMs));
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to set affinity for entity ${entityId} worker ${workerId}:`, err);
+    }
+  }
+
+  // Gate blocked — create a replacement unclaimed invocation so the entity
+  // can be reclaimed; without it the entity would be permanently orphaned.
+  if (result.gated) {
+    await deps.invocations.create(
+      entityId,
+      activeInvocation.stage,
+      activeInvocation.prompt,
+      activeInvocation.mode,
+      undefined,
+      activeInvocation.context ?? undefined,
+    );
+
+    if (result.gateTimedOut) {
+      const renderedPrompt = result.timeoutPrompt ?? DEFAULT_TIMEOUT_PROMPT;
+      return jsonResult({
+        next_action: "check_back",
+        message: renderedPrompt,
+        retry_after_ms: 30000,
+        timeout_prompt: renderedPrompt,
+      });
+    }
+
+    return jsonResult({
+      new_state: null,
+      gated: true,
+      gate_output: result.gateOutput,
+      gateName: result.gateName,
+      next_action: "waiting",
+      failure_prompt: result.failurePrompt ?? null,
+    });
+  }
+
+  // If the engine created a next invocation, fetch its prompt
+  let nextPrompt: string | null = null;
+  let nextContext: Record<string, unknown> | null = null;
+  if (result.invocationId) {
+    const nextInvocation = await deps.invocations.get(result.invocationId);
+    if (nextInvocation) {
+      nextPrompt = nextInvocation.prompt;
+      nextContext = nextInvocation.context;
+    }
+  }
+
+  const nextAction = result.terminal ? "completed" : result.invocationId ? "continue" : "waiting";
+
+  return jsonResult({
+    new_state: result.newState,
+    gates_passed: result.gatesPassed,
+    next_action: nextAction,
+    prompt: nextPrompt,
+    context: nextContext,
+  });
+}
+
+export async function handleFlowFail(deps: McpServerDeps, args: Record<string, unknown>) {
+  const v = validateInput(FlowFailSchema, args);
+  if (!v.ok) return v.result;
+  const { entity_id: entityId, error } = v.data;
+
+  const invocationList = await deps.invocations.findByEntity(entityId);
+  const activeInvocation = invocationList.find(
+    (inv) => inv.claimedAt !== null && inv.completedAt === null && inv.failedAt === null,
+  );
+
+  if (!activeInvocation) {
+    return errorResult(`No active invocation found for entity: ${entityId}`);
+  }
+
+  await deps.invocations.fail(activeInvocation.id, error);
+
+  return jsonResult({ acknowledged: true });
+}
