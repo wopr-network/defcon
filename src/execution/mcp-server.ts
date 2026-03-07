@@ -94,10 +94,15 @@ const TOOL_DEFINITIONS = [
   {
     name: "flow.report",
     description:
-      "Report completion of work on an entity. Triggers state transition and gate evaluation. " +
-      'Returns next_action: "continue" (next prompt ready), "waiting" (gate explicitly failed — stop until something external changes), ' +
-      '"check_back" (gate is still evaluating — this is not an error, call flow.report again with the same arguments after retry_after_ms), ' +
+      "Report completion of work on an entity. **This call blocks until gate evaluation completes** — " +
+      "which may take milliseconds (trivial gate) or many minutes (CI pipeline). Do not set a short client-side " +
+      "timeout on this call. For HTTP/SSE transports, configure a long timeout (24h is safe). " +
+      "The stdio transport has no timeout by default. " +
+      'Returns next_action: "continue" (next prompt ready), "waiting" (gate failed — stop, do not retry), ' +
+      '"check_back" (gate timed out — not an error, call flow.report again with the same arguments after retry_after_ms), ' +
       'or "completed" (terminal state). ' +
+      "Set gate timeout_ms to the maximum time you are willing to wait, not an expected duration — " +
+      "the call returns as soon as the gate resolves. " +
       "gates_passed contains gate names (not IDs).",
     inputSchema: {
       type: "object" as const,

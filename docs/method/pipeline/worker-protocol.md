@@ -193,6 +193,10 @@ Timeouts are configurable at two levels:
 
 Gate-level overrides flow-level. Flow-level overrides the system default.
 
+**`timeout_ms` is a maximum wait ceiling, not an expected duration.** A gate with `timeout_ms: 600000` (10 minutes) that resolves in 30 seconds returns at the 30-second mark. The timeout only fires if the gate has not resolved — at which point the worker receives `check_back` and can retry. Set it generously: the realistic worst case for the gate, not the average case.
+
+**Transport implications:** The report call blocks for up to `timeout_ms`. Any network layer between the worker and the engine must allow connections to stay open at least that long. HTTP proxies, load balancers, and client libraries all have default timeouts that may be shorter than your gate timeout — configure them explicitly.
+
 ### Timeout Prompts
 
 Gates and flows can define a `timeout_prompt` — what the worker should do during a `check_back`. This is a prompt template with access to the same context as the stage prompt.
