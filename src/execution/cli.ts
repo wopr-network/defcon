@@ -548,7 +548,11 @@ export function resolveSessionId(
   return searchParams.get("sessionId") ?? "";
 }
 
-program.parseAsync(process.argv).catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+// Only run when invoked as the main entry point, not when imported as a module
+const isMain = process.argv[1] != null && new URL(process.argv[1], "file:").href === import.meta.url;
+if (isMain) {
+  program.parseAsync(process.argv).catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
