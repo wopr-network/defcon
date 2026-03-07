@@ -362,7 +362,11 @@ export class Engine {
           }
 
           if (workerId) {
-            await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            try {
+              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            } catch (err) {
+              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
+            }
           }
 
           const state = flow.states.find((s) => s.name === pending.stage);
@@ -400,7 +404,11 @@ export class Engine {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
         if (claimed) {
           if (workerId) {
-            await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            try {
+              await this.entityRepo.setAffinity(claimed.id, workerId, role, new Date(Date.now() + affinityWindow));
+            } catch (err) {
+              console.warn(`setAffinity failed for entity ${claimed.id} worker ${workerId} — continuing:`, err);
+            }
           }
 
           const [invocations, gateResults] = await Promise.all([
