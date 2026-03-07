@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { Engine } from "../engine/engine.js";
 import type { McpServerDeps } from "../execution/mcp-server.js";
@@ -15,6 +16,22 @@ export interface HttpServerDeps {
   engine: Engine;
   mcpDeps: McpServerDeps;
   adminToken?: string;
+  workerToken?: string;
+}
+
+function requireWorkerToken(deps: HttpServerDeps, req: ParsedRequest): ApiResponse | null {
+  const configuredToken = deps.workerToken || undefined; // treat "" as unset
+  if (!configuredToken) return null; // open mode
+  const callerToken = extractBearerToken(req.authorization);
+  if (!callerToken) {
+    return { status: 401, body: { error: "Unauthorized: worker endpoints require authentication." } };
+  }
+  const hashA = createHash("sha256").update(configuredToken.trim()).digest();
+  const hashB = createHash("sha256").update(callerToken.trim()).digest();
+  if (!timingSafeEqual(hashA, hashB)) {
+    return { status: 401, body: { error: "Unauthorized: worker endpoints require authentication." } };
+  }
+  return null;
 }
 
 const BODY_SIZE_LIMIT = 1024 * 1024; // 1MB
@@ -80,13 +97,19 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
 
   // --- Flow claim ---
   router.add("POST", "/api/flows/:flow/claim", async (req) => {
+    const authErr = requireWorkerToken(deps, req);
+    if (authErr) return authErr;
     const args = { role: req.body?.role as string, flow: req.params.flow };
     const result = await callToolHandler(deps.mcpDeps, "flow.claim", args);
-    return mcpResultToApi(result);
+    const apiRes = mcpResultToApi(result);
+    if (apiRes.status === 200 && apiRes.body === null) return { status: 204, body: null };
+    return apiRes;
   });
 
   // --- Entity report ---
   router.add("POST", "/api/entities/:id/report", async (req) => {
+    const authErr = requireWorkerToken(deps, req);
+    if (authErr) return authErr;
     const args: Record<string, unknown> = {
       entity_id: req.params.id,
       signal: req.body?.signal as string,
@@ -98,6 +121,8 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
 
   // --- Entity fail ---
   router.add("POST", "/api/entities/:id/fail", async (req) => {
+    const authErr = requireWorkerToken(deps, req);
+    if (authErr) return authErr;
     const args = { entity_id: req.params.id, error: req.body?.error as string };
     const result = await callToolHandler(deps.mcpDeps, "flow.fail", args);
     return mcpResultToApi(result);
