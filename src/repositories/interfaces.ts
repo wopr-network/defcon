@@ -209,6 +209,10 @@ export interface IEntityRepository {
 
   /** Find entities whose claim has expired beyond ttlMs and release them. Returns the IDs of released entities. */
   reapExpired(ttlMs: number): Promise<string[]>;
+
+  /** Atomically append a spawned child entry to the parent entity's artifacts.spawnedChildren array.
+   *  Reads the current array and writes back in a single transaction to prevent TOCTOU races. */
+  appendSpawnedChild(parentId: string, entry: { childId: string; childFlow: string; spawnedAt: string }): Promise<void>;
 }
 
 /** Fields that can be updated on a flow's top-level definition */
