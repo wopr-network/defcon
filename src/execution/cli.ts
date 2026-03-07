@@ -274,7 +274,8 @@ program
       resolvedAiConfig = resolveConfigSecrets((aiConfig?.config as Record<string, unknown>) ?? null);
     } catch (err) {
       sqlite.close();
-      throw err;
+      console.error("Failed to resolve config secrets:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
     }
     const apiKey = (resolvedAiConfig as { apiKey?: string } | null)?.apiKey ?? process.env.ANTHROPIC_API_KEY;
 
@@ -438,7 +439,8 @@ program
       resolvedLinearConfig = resolveConfigSecrets((linearConfig?.config as Record<string, unknown>) ?? null);
     } catch (err) {
       sqlite.close();
-      throw err;
+      console.error("Failed to resolve config secrets:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
     }
     const apiKey = (resolvedLinearConfig as { apiKey?: string } | null)?.apiKey ?? process.env.LINEAR_API_KEY;
 
