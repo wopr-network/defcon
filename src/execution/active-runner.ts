@@ -190,6 +190,7 @@ export class ActiveRunner {
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
   return new Promise((resolve) => {
     const onAbort = () => {
       clearTimeout(timer);

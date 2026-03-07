@@ -510,9 +510,9 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     const priB = entityB?.priority ?? 0;
     if (priA !== priB) return priB - priA;
 
-    // Tier 3: Time in state (longest waiting sorts first — earlier updatedAt)
-    const timeA = entityA?.updatedAt?.getTime() ?? now;
-    const timeB = entityB?.updatedAt?.getTime() ?? now;
+    // Tier 3: Time in state (longest waiting sorts first — earlier createdAt as stable proxy)
+    const timeA = entityA?.createdAt?.getTime() ?? now;
+    const timeB = entityB?.createdAt?.getTime() ?? now;
     return timeA - timeB;
   });
 
@@ -531,7 +531,11 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     if (claimed) {
       const entity = entityMap.get(claimed.entityId);
       if (entity) {
-        await deps.entities.claimById(entity.id, workerId);
+        const claimedEntity = await deps.entities.claimById(entity.id, workerId);
+        if (!claimedEntity) {
+          // Race condition: another worker claimed this entity first; skip to next candidate
+          continue;
+        }
       }
       const flow = entity ? flowById.get(entity.flowId) : undefined;
       // Record affinity for the claiming worker
