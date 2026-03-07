@@ -143,7 +143,8 @@ export class Engine {
               flow,
               gate: { name: gate.name, output: gateResult.output },
             });
-          } catch {
+          } catch (err) {
+            console.error("[engine] Failed to render timeoutPrompt template:", err);
             resolvedTimeoutPrompt = SYSTEM_DEFAULT_TIMEOUT;
           }
         }

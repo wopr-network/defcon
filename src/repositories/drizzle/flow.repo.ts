@@ -152,6 +152,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.version !== undefined) updateValues.version = changes.version;
     if (changes.createdBy !== undefined) updateValues.createdBy = changes.createdBy;
     if (changes.discipline !== undefined) updateValues.discipline = changes.discipline;
+    if (changes.timeoutPrompt !== undefined) updateValues.timeoutPrompt = changes.timeoutPrompt;
 
     this.db.update(flowDefinitions).set(updateValues).where(eq(flowDefinitions.id, id)).run();
 
@@ -264,6 +265,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       affinityWindowMs: flow.affinityWindowMs,
       version: flow.version,
       createdBy: flow.createdBy,
+      timeoutPrompt: flow.timeoutPrompt,
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,
       states: flow.states,
@@ -319,6 +321,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       affinityWindowMs: number;
       version: number;
       createdBy: string | null;
+      timeoutPrompt: string | null;
       states: State[];
       transitions: Transition[];
     };
@@ -371,6 +374,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
           affinityWindowMs: snap.affinityWindowMs,
           version: snap.version,
           createdBy: snap.createdBy,
+          timeoutPrompt: snap.timeoutPrompt,
           updatedAt: Date.now(),
         })
         .where(eq(flowDefinitions.id, flowId))
