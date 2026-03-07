@@ -22,4 +22,8 @@ export class DrizzleEventRepository implements IEventRepository {
       })
       .run();
   }
+
+  findAll(): (typeof events.$inferSelect)[] {
+    return this.db.select().from(events).all();
+  }
 }
