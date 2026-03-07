@@ -97,7 +97,7 @@ export const AdminGateCreateSchema = z.discriminatedUnion("type", [
   z.object({
     name: z.string().min(1),
     type: z.literal("function"),
-    functionRef: z.string().min(1),
+    functionRef: z.string().regex(/^[^:]+:[^:]+$/, "functionRef must be in 'path:exportName' format"),
     timeoutMs: z.number().int().min(0).optional(),
   }),
   z.object({

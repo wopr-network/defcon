@@ -51,7 +51,7 @@ export const CommandGateSchema = BaseGateSchema.extend({
 
 export const FunctionGateSchema = BaseGateSchema.extend({
   type: z.literal("function"),
-  functionRef: z.string().min(1),
+  functionRef: z.string().regex(/^[^:]+:[^:]+$/, "functionRef must be in 'path:exportName' format"),
 });
 
 export const ApiGateSchema = BaseGateSchema.extend({

@@ -134,8 +134,11 @@ async function runFunction(
     Promise.resolve(fn(entity, gate)).finally(() => {
       if (timer !== undefined) clearTimeout(timer);
     }),
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`Function gate timed out after ${timeout}ms`)), timeout);
+    new Promise<{ passed: boolean; output: string }>((resolve) => {
+      timer = setTimeout(
+        () => resolve({ passed: false, output: `Function gate timed out after ${timeout}ms` }),
+        timeout,
+      );
     }),
   ]);
 
