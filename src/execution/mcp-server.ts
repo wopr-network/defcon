@@ -1,4 +1,7 @@
 // MCP server — passive mode (flow.claim, flow.report, query.*)
+const DEFAULT_TIMEOUT_PROMPT =
+  "Your report was received. The gate is still evaluating — this is not an error. Call flow.claim to reclaim the entity, then call flow.report again with the same arguments after a short wait.";
+
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -659,9 +662,7 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
     );
 
     if (result.gateTimedOut) {
-      const renderedPrompt =
-        result.timeoutPrompt ??
-        "Your report was received. The gate is still evaluating — this is not an error. Call flow.claim to reclaim the entity, then call flow.report again with the same arguments after a short wait.";
+      const renderedPrompt = result.timeoutPrompt ?? DEFAULT_TIMEOUT_PROMPT;
       return jsonResult({
         next_action: "check_back",
         message: renderedPrompt,
