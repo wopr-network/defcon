@@ -14,7 +14,7 @@ export interface GateEvalResult {
 // Anchor path-traversal checks to the project root. realpathSync resolves symlinks
 // so the containment check works even when the project directory itself is a symlink.
 const PROJECT_ROOT = realpathSync(resolve(fileURLToPath(new URL("../..", import.meta.url))));
-const GATES_DIR = resolve(PROJECT_ROOT, "gates") + sep;
+const GATES_DIR = realpathSync(resolve(PROJECT_ROOT, "gates")) + sep;
 
 function getSystemDefaultGateTimeout(): number {
   const parsed = parseInt(process.env.DEFCON_DEFAULT_GATE_TIMEOUT_MS ?? "", 10);
@@ -150,12 +150,14 @@ async function runFunction(
   let realPath: string;
   try {
     realPath = realpathSync(absPath);
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") throw err;
     // File doesn't exist yet — use the unresolved path for the bounds check
     realPath = absPath;
   }
   if (!realPath.startsWith(GATES_DIR)) {
-    throw new Error(`functionRef must resolve to a path inside gates/ directory, got: ${realPath}`);
+    throw new Error("functionRef must resolve to a path inside the gates/ directory");
   }
   const moduleUrl = pathToFileURL(realPath).href;
 
