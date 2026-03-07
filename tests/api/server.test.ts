@@ -17,7 +17,7 @@ import { Router } from "../../src/api/router.js";
 
 const MIGRATIONS_FOLDER = new URL("../../drizzle", import.meta.url).pathname;
 
-function makeTestDeps(): HttpServerDeps & { stopReaper: () => Promise<void> } {
+function makeTestDeps(): HttpServerDeps & { stopReaper: () => Promise<void>; closeDb: () => void } {
   const sqlite = new Database(":memory:");
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
@@ -54,7 +54,7 @@ function makeTestDeps(): HttpServerDeps & { stopReaper: () => Promise<void> } {
     engine,
   };
 
-  return { engine, mcpDeps, adminToken: undefined, stopReaper };
+  return { engine, mcpDeps, adminToken: undefined, stopReaper, closeDb: () => sqlite.close() };
 }
 
 async function listen(server: http.Server): Promise<number> {
@@ -261,7 +261,7 @@ describe("HTTP Server - basic", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: "worker" }),
     });
-    expect([204, 200].includes(res.status)).toBe(true);
+    expect([204, 200]).toContain(res.status);
   });
 
   it("POST /api/entities/:id/report for nonexistent entity", async () => {
@@ -299,7 +299,7 @@ describe("HTTP Server - explicit CORS origin", () => {
 
   beforeAll(async () => {
     deps = makeTestDeps();
-    (deps as unknown as Record<string, unknown>).corsOrigin = "https://app.example.com";
+    deps.corsOrigin = "https://app.example.com";
     server = createHttpServer(deps);
     port = await listen(server);
   });
@@ -307,6 +307,7 @@ describe("HTTP Server - explicit CORS origin", () => {
   afterAll(async () => {
     server.close();
     await deps.stopReaper();
+    deps.closeDb();
   });
 
   it("reflects matching explicit CORS origin", async () => {
@@ -335,10 +336,12 @@ describe("HTTP Server - handler error", () => {
   let server: http.Server;
   let port: number;
   let stopReaper: () => Promise<void>;
+  let closeDb: () => void;
 
   beforeAll(async () => {
     const deps = makeTestDeps();
     stopReaper = deps.stopReaper;
+    closeDb = deps.closeDb;
     deps.engine.getStatus = async () => {
       throw new Error("boom");
     };
@@ -349,6 +352,7 @@ describe("HTTP Server - handler error", () => {
   afterAll(async () => {
     server.close();
     await stopReaper();
+    closeDb();
   });
 
   it("returns 500 when handler throws", async () => {

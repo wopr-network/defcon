@@ -277,6 +277,7 @@ describe("DrizzleInvocationRepository", () => {
     it("should return all invocations for a flow ordered by creation", async () => {
       await seedEntity();
       await repo.create("ent-1", "review", "First", "active");
+      await new Promise((r) => setTimeout(r, 2));
       await repo.create("ent-1", "build", "Second", "passive");
       const results = await repo.findByFlow("flow-1");
       expect(results).toHaveLength(2);
