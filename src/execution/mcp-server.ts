@@ -533,7 +533,9 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
       if (entity) {
         const claimedEntity = await deps.entities.claimById(entity.id, workerId);
         if (!claimedEntity) {
-          // Race condition: another worker claimed this entity first; skip to next candidate
+          // Race condition: another worker claimed this entity first.
+          // Release the invocation claim so it doesn't become a zombie lock.
+          await deps.invocations.fail(claimed.id, "entity claimed by another worker; releasing invocation lock");
           continue;
         }
       }

@@ -31,7 +31,7 @@ export const AdminFlowCreateSchema = z.object({
 export const AdminFlowUpdateSchema = z.object({
   flow_name: z.string().min(1),
   description: z.string().optional(),
-  discipline: z.string().min(1).optional(),
+  discipline: z.string().min(1).nullable().optional(),
   maxConcurrent: z.number().int().min(0).optional(),
   maxConcurrentPerRepo: z.number().int().min(0).optional(),
   affinityWindowMs: z.number().int().min(0).optional(),
