@@ -7,8 +7,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions: {}
+
 jobs:
   ci:
+    permissions:
+      contents: read
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4

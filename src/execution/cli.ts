@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import { Command } from "commander";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { createHttpServer } from "../api/server.js";
 import { exportSeed } from "../config/exporter.js";
 import { loadSeed } from "../config/seed-loader.js";
 import { Engine } from "../engine/engine.js";
@@ -116,7 +117,7 @@ program
   .command("serve")
   .description("Start MCP server")
   .option("--transport <type>", "Transport: stdio or sse", "stdio")
-  .option("--port <number>", "Port for SSE transport", "3000")
+  .option("--port <number>", "Port for SSE transport", "3001")
   .option(
     "--host <address>",
     "Host address to bind to (default: 127.0.0.1, use 0.0.0.0 for network access)",
@@ -125,6 +126,10 @@ program
   .option("--db <path>", "Database path", DB_DEFAULT)
   .option("--reaper-interval <ms>", "Reaper poll interval in milliseconds", REAPER_INTERVAL_DEFAULT)
   .option("--claim-ttl <ms>", "Claim TTL in milliseconds", CLAIM_TTL_DEFAULT)
+  .option("--http-only", "Start HTTP REST server only (no MCP stdio)")
+  .option("--mcp-only", "Start MCP stdio only (no HTTP REST server)")
+  .option("--http-port <number>", "Port for HTTP REST API", "3000")
+  .option("--http-host <address>", "Host for HTTP REST API", "127.0.0.1")
   .action(async (opts) => {
     const { db, sqlite } = openDb(opts.db);
     const entityRepo = new DrizzleEntityRepository(db);
@@ -174,9 +179,33 @@ program
     }
     const stopReaper = engine.startReaper(reaperInterval, claimTtl);
 
+    if (opts.httpOnly && opts.mcpOnly) {
+      console.error("Cannot use --http-only and --mcp-only together");
+      sqlite.close();
+      process.exit(1);
+    }
+
     const adminToken = process.env.DEFCON_ADMIN_TOKEN || undefined;
 
-    if (opts.transport === "sse") {
+    const startHttp = !opts.mcpOnly;
+    const startMcp = !opts.httpOnly;
+
+    let restHttpServer: ReturnType<typeof createHttpServer> | undefined;
+    if (startHttp) {
+      const httpPort = parseInt(opts.httpPort as string, 10);
+      const httpHost = opts.httpHost as string;
+      restHttpServer = createHttpServer({ engine, mcpDeps: deps, adminToken });
+      restHttpServer.listen(httpPort, httpHost, () => {
+        const addr = restHttpServer?.address();
+        const boundPort = addr && typeof addr === "object" ? addr.port : httpPort;
+        console.error(`HTTP REST API listening on ${httpHost}:${boundPort}`);
+      });
+      if (!adminToken) {
+        console.warn("WARNING: DEFCON_ADMIN_TOKEN not set — admin routes are unauthenticated");
+      }
+    }
+
+    if (opts.transport === "sse" && startMcp) {
       const { SSEServerTransport } = await import("@modelcontextprotocol/sdk/server/sse.js");
       const http = await import("node:http");
       const port = parseInt(opts.port, 10);
@@ -256,6 +285,7 @@ program
       }
 
       const shutdown = () => {
+        restHttpServer?.close();
         stopReaper().then(() => {
           httpServer.close();
           sqlite.close();
@@ -264,7 +294,7 @@ program
       };
       process.on("SIGINT", shutdown);
       process.on("SIGTERM", shutdown);
-    } else {
+    } else if (startMcp) {
       // stdio (default)
       console.error("Starting MCP server on stdio...");
       const cleanup = () => {
@@ -277,6 +307,17 @@ program
       process.on("SIGTERM", cleanup);
       const mcpOpts: McpServerOpts = { adminToken, stdioTrusted: true };
       await startStdioServer(deps, mcpOpts);
+    } else {
+      // HTTP-only mode — keep process alive
+      const cleanup = () => {
+        restHttpServer?.close();
+        stopReaper().then(() => {
+          sqlite.close();
+          process.exit(0);
+        });
+      };
+      process.on("SIGINT", cleanup);
+      process.on("SIGTERM", cleanup);
     }
   });
 
@@ -369,8 +410,9 @@ export function verifySessionToken(storedTokenHash: string | undefined, incoming
 
 function extractBearerToken(header: string | undefined): string | undefined {
   if (!header) return undefined;
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim();
+  const lower = header.toLowerCase();
+  if (!lower.startsWith("bearer ")) return undefined;
+  return header.slice(7).trim() || undefined;
 }
 
 /**
