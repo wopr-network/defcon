@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCorsOrigin } from "./cors.js";
+import { resolveCorsOrigin } from "../src/cors.js";
 
 describe("resolveCorsOrigin", () => {
   it("returns null for loopback 127.0.0.1 (no restriction needed)", () => {

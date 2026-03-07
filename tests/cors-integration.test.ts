@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCorsOrigin } from "./cors.js";
+import { resolveCorsOrigin } from "../src/cors.js";
 
 describe("CORS origin enforcement (integration)", () => {
   it("non-loopback host without env var throws actionable error", () => {

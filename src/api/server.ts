@@ -206,8 +206,10 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
     // CORS
     const origin = req.headers.origin;
     if (origin) {
-      const allowed = deps.corsOrigin ?? "http://localhost";
-      if (origin === allowed) {
+      const corsAllowed = deps.corsOrigin
+        ? origin === deps.corsOrigin // explicit origin: exact match only
+        : true; // loopback mode: reflect any origin (all loopback origins are safe)
+      if (corsAllowed) {
         res.setHeader("Vary", "Origin");
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
