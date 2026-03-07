@@ -72,7 +72,7 @@ describe("executeOnEnter", () => {
     const entity = makeEntity();
     const repo = makeEntityRepo();
     const onEnter: OnEnterConfig = {
-      command: 'echo {"worktreePath":"/tmp/wt","branch":"fix-123"}',
+      command: `echo '{"worktreePath":"/tmp/wt","branch":"fix-123"}'`,
       artifacts: ["worktreePath", "branch"],
     };
 
@@ -142,7 +142,7 @@ describe("executeOnEnter", () => {
     const entity = makeEntity();
     const repo = makeEntityRepo();
     const onEnter: OnEnterConfig = {
-      command: 'echo {"worktreePath":"/tmp/wt"}',
+      command: `echo '{"worktreePath":"/tmp/wt"}'`,
       artifacts: ["worktreePath", "branch"],
     };
 
@@ -173,7 +173,7 @@ describe("executeOnEnter", () => {
     const entity = makeEntity({ artifacts: { worktreePath: "/tmp/wt" } });
     const repo = makeEntityRepo();
     const onEnter: OnEnterConfig = {
-      command: 'echo {"worktreePath":"/tmp/wt2","branch":"fix-456"}',
+      command: `echo '{"worktreePath":"/tmp/wt2","branch":"fix-456"}'`,
       artifacts: ["worktreePath", "branch"],
     };
 
@@ -232,7 +232,7 @@ describe("Engine onEnter integration", () => {
       agentRole: "coder",
       promptTemplate: "code at {{entity.artifacts.worktreePath}}",
       onEnter: {
-        command: 'echo {"worktreePath":"/tmp/wt","branch":"fix-1"}',
+        command: `echo '{"worktreePath":"/tmp/wt","branch":"fix-1"}'`,
         artifacts: ["worktreePath", "branch"],
       },
     });
@@ -262,7 +262,7 @@ describe("Engine onEnter integration", () => {
       agentRole: "coder",
       promptTemplate: "code",
       onEnter: {
-        command: 'echo {"worktreePath":"/tmp/wt","branch":"fix-1"}',
+        command: `echo '{"worktreePath":"/tmp/wt","branch":"fix-1"}'`,
         artifacts: ["worktreePath", "branch"],
       },
     });
@@ -298,7 +298,8 @@ describe("Engine onEnter integration", () => {
     const entity = await engine.createEntity("test-flow3");
     const result = await engine.processSignal(entity.id, "approved");
 
-    expect(result.gated).toBe(true);
+    expect(result.gated).toBe(false);
+    expect(result.onEnterFailed).toBe(true);
     expect(result.gateOutput).toContain("onEnter");
     expect(result.invocationId).toBeUndefined();
 
