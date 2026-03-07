@@ -91,6 +91,8 @@ describe("repository interfaces compile", () => {
     expectTypeOf<IInvocationRepository>().toHaveProperty("findByEntity");
     expectTypeOf<IInvocationRepository>().toHaveProperty("findUnclaimed");
     expectTypeOf<IInvocationRepository>().toHaveProperty("reapExpired");
+    expectTypeOf<IInvocationRepository>().toHaveProperty("countActiveByFlow");
+    expectTypeOf<IInvocationRepository>().toHaveProperty("countPendingByFlow");
   });
 
   it("IGateRepository has all methods", () => {

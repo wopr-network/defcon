@@ -362,11 +362,29 @@ export class Engine {
   }
 
   async getStatus(): Promise<EngineStatus> {
-    return {
-      flows: {},
-      activeInvocations: 0,
-      pendingClaims: 0,
-    };
+    const allFlows = await this.flowRepo.listAll();
+    const statusData: Record<string, Record<string, number>> = {};
+    let activeInvocations = 0;
+    let pendingClaims = 0;
+
+    for (const flow of allFlows) {
+      const stateEntries = await Promise.all(
+        flow.states.map(async (state) => {
+          const entities = await this.entityRepo.findByFlowAndState(flow.id, state.name);
+          return [state.name, entities.length] as [string, number];
+        }),
+      );
+      statusData[flow.id] = Object.fromEntries(stateEntries);
+
+      const [active, pending] = await Promise.all([
+        this.invocationRepo.countActiveByFlow(flow.id),
+        this.invocationRepo.countPendingByFlow(flow.id),
+      ]);
+      activeInvocations += active;
+      pendingClaims += pending;
+    }
+
+    return { flows: statusData, activeInvocations, pendingClaims };
   }
 
   startReaper(intervalMs: number, entityTtlMs: number = 60_000): () => Promise<void> {
