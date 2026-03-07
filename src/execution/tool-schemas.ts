@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 export const FlowClaimSchema = z.object({
   role: z.string().min(1),
   flow: z.string().min(1).optional(),
+  worker_id: z.string().min(1).optional(),
 });
 
 export const FlowGetPromptSchema = z.object({
@@ -13,6 +14,7 @@ export const FlowReportSchema = z.object({
   entity_id: z.string().min(1),
   signal: z.string().min(1),
   artifacts: z.record(z.string(), z.unknown()).optional(),
+  worker_id: z.string().min(1).optional(),
 });
 
 export const FlowFailSchema = z.object({

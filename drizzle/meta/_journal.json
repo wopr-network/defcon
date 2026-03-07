@@ -29,6 +29,13 @@
       "when": 1772820079907,
       "tag": "0003_drop_integration_config",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1772868838854,
+      "tag": "0004_lucky_silverclaw",
+      "breakpoints": true
     }
   ]
 }

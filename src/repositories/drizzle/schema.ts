@@ -10,6 +10,7 @@ export const flowDefinitions = sqliteTable("flow_definitions", {
   initialState: text("initial_state").notNull(),
   maxConcurrent: integer("max_concurrent").default(0),
   maxConcurrentPerRepo: integer("max_concurrent_per_repo").default(0),
+  affinityWindowMs: integer("affinity_window_ms").default(300000),
   version: integer("version").default(1),
   createdBy: text("created_by"),
   createdAt: integer("created_at"),
@@ -96,10 +97,14 @@ export const entities = sqliteTable(
     flowVersion: integer("flow_version"),
     createdAt: integer("created_at"),
     updatedAt: integer("updated_at"),
+    affinityWorkerId: text("affinity_worker_id"),
+    affinityRole: text("affinity_role"),
+    affinityExpiresAt: integer("affinity_expires_at"),
   },
   (table) => ({
     flowStateIdx: index("entities_flow_state_idx").on(table.flowId, table.state),
     claimIdx: index("entities_claim_idx").on(table.flowId, table.state, table.claimedBy),
+    affinityIdx: index("entities_affinity_idx").on(table.affinityWorkerId, table.affinityRole, table.affinityExpiresAt),
   }),
 );
 

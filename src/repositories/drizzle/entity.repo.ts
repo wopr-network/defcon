@@ -21,6 +21,9 @@ export class DrizzleEntityRepository implements IEntityRepository {
       flowVersion: row.flowVersion ?? 1,
       createdAt: new Date(row.createdAt ?? 0),
       updatedAt: new Date(row.updatedAt ?? 0),
+      affinityWorkerId: row.affinityWorkerId ?? null,
+      affinityRole: row.affinityRole ?? null,
+      affinityExpiresAt: row.affinityExpiresAt ? new Date(row.affinityExpiresAt) : null,
     };
   }
 
@@ -38,6 +41,9 @@ export class DrizzleEntityRepository implements IEntityRepository {
       flowVersion: 1,
       createdAt: now,
       updatedAt: now,
+      affinityWorkerId: null,
+      affinityRole: null,
+      affinityExpiresAt: null,
     };
     await this.db.insert(entities).values(row);
     return this.toEntity(row as typeof entities.$inferSelect);
@@ -155,6 +161,29 @@ export class DrizzleEntityRepository implements IEntityRepository {
       .update(entities)
       .set({ claimedBy: null, claimedAt: null, updatedAt: Date.now() })
       .where(and(not(isNull(entities.claimedBy)), lt(entities.claimedAt, cutoff)))
+      .returning({ id: entities.id })
+      .all();
+    return rows.map((r) => r.id);
+  }
+
+  async setAffinity(entityId: string, workerId: string, role: string, expiresAt: Date): Promise<void> {
+    await this.db
+      .update(entities)
+      .set({
+        affinityWorkerId: workerId,
+        affinityRole: role,
+        affinityExpiresAt: expiresAt.getTime(),
+        updatedAt: Date.now(),
+      })
+      .where(eq(entities.id, entityId));
+  }
+
+  async clearExpiredAffinity(): Promise<string[]> {
+    const now = Date.now();
+    const rows = this.db
+      .update(entities)
+      .set({ affinityWorkerId: null, affinityRole: null, affinityExpiresAt: null, updatedAt: now })
+      .where(and(not(isNull(entities.affinityWorkerId)), lt(entities.affinityExpiresAt, now)))
       .returning({ id: entities.id })
       .all();
     return rows.map((r) => r.id);
