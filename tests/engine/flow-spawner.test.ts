@@ -32,6 +32,7 @@ describe("executeSpawn", () => {
     const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
     const entityRepo = {
       create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(parentEntity),
       updateArtifacts: vi.fn().mockResolvedValue(undefined),
     } as unknown as IEntityRepository;
 
@@ -71,6 +72,7 @@ describe("executeSpawn", () => {
     const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
     const entityRepo = {
       create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(parentEntity),
       updateArtifacts: vi.fn().mockResolvedValue(undefined),
     } as unknown as IEntityRepository;
 
@@ -114,6 +116,7 @@ describe("executeSpawn", () => {
     const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
     const entityRepo = {
       create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(parentEntity),
       updateArtifacts: vi.fn().mockResolvedValue(undefined),
     } as unknown as IEntityRepository;
 
@@ -125,6 +128,123 @@ describe("executeSpawn", () => {
         { childId: "ent-2", childFlow: "deploy-flow", spawnedAt: expect.any(String) },
       ],
     });
+  });
+
+  it("reads fresh entity from DB before building spawnedChildren (TOCTOU)", async () => {
+    const transition: Transition = {
+      id: "t-1", flowId: "flow-1", fromState: "review", toState: "done",
+      trigger: "approved", gateId: null, condition: null, priority: 0,
+      spawnFlow: "deploy-flow", spawnTemplate: null, createdAt: null,
+    };
+    // parentEntity passed in has stale artifacts (no children yet)
+    const parentEntity: Entity = {
+      id: "ent-1", flowId: "flow-1", state: "done",
+      refs: null, artifacts: null, claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    // DB has a fresher version with an existing child
+    const freshEntity: Entity = {
+      ...parentEntity,
+      artifacts: { spawnedChildren: [{ childId: "ent-0", childFlow: "build-flow", spawnedAt: "2025-01-01T00:00:00.000Z" }] },
+    };
+    const spawnedFlow = {
+      id: "flow-2", name: "deploy-flow", description: null, entitySchema: null,
+      initialState: "pending", maxConcurrent: 0, maxConcurrentPerRepo: 0,
+      version: 1, createdBy: null, createdAt: null, updatedAt: null,
+      states: [], transitions: [],
+    };
+    const spawnedEntity: Entity = {
+      id: "ent-2", flowId: "flow-2", state: "pending",
+      refs: null, artifacts: null, claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
+    const entityRepo = {
+      create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(freshEntity),
+      updateArtifacts: vi.fn().mockResolvedValue(undefined),
+    } as unknown as IEntityRepository;
+
+    await executeSpawn(transition, parentEntity, flowRepo, entityRepo);
+
+    // Must have fetched fresh entity and included the pre-existing child
+    expect(entityRepo.get).toHaveBeenCalledWith("ent-1");
+    expect(entityRepo.updateArtifacts).toHaveBeenCalledWith("ent-1", {
+      spawnedChildren: [
+        { childId: "ent-0", childFlow: "build-flow", spawnedAt: "2025-01-01T00:00:00.000Z" },
+        { childId: "ent-2", childFlow: "deploy-flow", spawnedAt: expect.any(String) },
+      ],
+    });
+  });
+
+  it("throws if updateArtifacts fails after create (orphan guard)", async () => {
+    const transition: Transition = {
+      id: "t-1", flowId: "flow-1", fromState: "review", toState: "done",
+      trigger: "approved", gateId: null, condition: null, priority: 0,
+      spawnFlow: "deploy-flow", spawnTemplate: null, createdAt: null,
+    };
+    const parentEntity: Entity = {
+      id: "ent-1", flowId: "flow-1", state: "done",
+      refs: null, artifacts: null, claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    const spawnedFlow = {
+      id: "flow-2", name: "deploy-flow", description: null, entitySchema: null,
+      initialState: "pending", maxConcurrent: 0, maxConcurrentPerRepo: 0,
+      version: 1, createdBy: null, createdAt: null, updatedAt: null,
+      states: [], transitions: [],
+    };
+    const spawnedEntity: Entity = {
+      id: "ent-2", flowId: "flow-2", state: "pending",
+      refs: null, artifacts: null, claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
+    const entityRepo = {
+      create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(parentEntity),
+      updateArtifacts: vi.fn().mockRejectedValue(new Error("DB write failed")),
+    } as unknown as IEntityRepository;
+
+    await expect(executeSpawn(transition, parentEntity, flowRepo, entityRepo)).rejects.toThrow(
+      /orphan.*ent-2|updateArtifacts.*ent-1/i,
+    );
+  });
+
+  it("parses spawnedChildren safely without unsafe cast", async () => {
+    const transition: Transition = {
+      id: "t-1", flowId: "flow-1", fromState: "review", toState: "done",
+      trigger: "approved", gateId: null, condition: null, priority: 0,
+      spawnFlow: "deploy-flow", spawnTemplate: null, createdAt: null,
+    };
+    // artifacts.spawnedChildren contains an invalid entry (not the expected shape)
+    const parentEntity: Entity = {
+      id: "ent-1", flowId: "flow-1", state: "done",
+      refs: null,
+      artifacts: { spawnedChildren: ["not-an-object", 42, null] },
+      claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    const spawnedFlow = {
+      id: "flow-2", name: "deploy-flow", description: null, entitySchema: null,
+      initialState: "pending", maxConcurrent: 0, maxConcurrentPerRepo: 0,
+      version: 1, createdBy: null, createdAt: null, updatedAt: null,
+      states: [], transitions: [],
+    };
+    const spawnedEntity: Entity = {
+      id: "ent-2", flowId: "flow-2", state: "pending",
+      refs: null, artifacts: null, claimedBy: null, claimedAt: null,
+      flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    };
+    const flowRepo = { getByName: vi.fn().mockResolvedValue(spawnedFlow) } as unknown as IFlowRepository;
+    const entityRepo = {
+      create: vi.fn().mockResolvedValue(spawnedEntity),
+      get: vi.fn().mockResolvedValue(parentEntity),
+      updateArtifacts: vi.fn().mockResolvedValue(undefined),
+    } as unknown as IEntityRepository;
+
+    // Should not throw even with malformed existing children — filter out invalid entries
+    await expect(executeSpawn(transition, parentEntity, flowRepo, entityRepo)).resolves.not.toBeNull();
   });
 
   it("returns null when transition has no spawnFlow", async () => {

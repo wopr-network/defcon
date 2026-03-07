@@ -18,17 +18,31 @@ export async function executeSpawn(
 
   const childEntity = await entityRepo.create(flow.id, flow.initialState, parentEntity.refs ?? undefined);
 
-  const existing = (parentEntity.artifacts?.spawnedChildren ?? []) as Array<{
-    childId: string;
-    childFlow: string;
-    spawnedAt: string;
-  }>;
-  await entityRepo.updateArtifacts(parentEntity.id, {
-    spawnedChildren: [
-      ...existing,
-      { childId: childEntity.id, childFlow: transition.spawnFlow, spawnedAt: new Date().toISOString() },
-    ],
-  });
+  // Re-fetch the parent from DB to avoid TOCTOU: the in-memory entity may be stale
+  // if another spawn raced between the caller reading it and us writing.
+  const freshParent = await entityRepo.get(parentEntity.id);
+  const rawChildren = freshParent?.artifacts?.spawnedChildren;
+  const existing = (Array.isArray(rawChildren) ? rawChildren : []).filter(
+    (c): c is { childId: string; childFlow: string; spawnedAt: string } =>
+      typeof c === "object" &&
+      c !== null &&
+      typeof (c as Record<string, unknown>).childId === "string" &&
+      typeof (c as Record<string, unknown>).childFlow === "string" &&
+      typeof (c as Record<string, unknown>).spawnedAt === "string",
+  );
+
+  try {
+    await entityRepo.updateArtifacts(parentEntity.id, {
+      spawnedChildren: [
+        ...existing,
+        { childId: childEntity.id, childFlow: transition.spawnFlow, spawnedAt: new Date().toISOString() },
+      ],
+    });
+  } catch (err) {
+    throw new Error(
+      `updateArtifacts failed for parent ${parentEntity.id} after creating orphan child ${childEntity.id}: ${String(err)}`,
+    );
+  }
 
   return childEntity;
 }
