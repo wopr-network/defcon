@@ -7,7 +7,6 @@ function makeState(overrides: Partial<State> = {}): State {
     id: "s-1",
     flowId: "flow-1",
     name: "coding",
-    agentRole: "coder",
     modelTier: "sonnet",
     mode: "active",
     promptTemplate: "Implement {{entity.artifacts.task}} for {{entity.refs.github.id}}",
@@ -38,7 +37,6 @@ describe("buildInvocation", () => {
     const entity = makeEntity();
     const result = await buildInvocation(state, entity);
     expect(result.prompt).toBe("Implement add auth middleware for wopr-network/wopr#123");
-    expect(result.agentRole).toBe("coder");
     expect(result.mode).toBe("active");
   });
 
@@ -71,9 +69,9 @@ describe("buildInvocation", () => {
     const entity: EnrichedEntity = {
       ...makeEntity(),
       invocations: [
-        { id: "i-1", entityId: "ent-1", stage: "coding", agentRole: null, mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
-        { id: "i-2", entityId: "ent-1", stage: "coding", agentRole: null, mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
-        { id: "i-3", entityId: "ent-1", stage: "review", agentRole: null, mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
+        { id: "i-1", entityId: "ent-1", stage: "coding", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
+        { id: "i-2", entityId: "ent-1", stage: "coding", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
+        { id: "i-3", entityId: "ent-1", stage: "review", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
       ],
     };
     const result = await buildInvocation(state, entity);

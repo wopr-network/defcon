@@ -31,23 +31,25 @@ export async function exportSeed(flowRepo: IFlowRepository, gateRepo: IGateRepos
     }
   }
 
-  const seedFlows: SeedFile["flows"] = flows.map((f) => ({
-    name: f.name,
-    description: f.description ?? undefined,
-    entitySchema: f.entitySchema ?? undefined,
-    initialState: f.initialState,
-    maxConcurrent: f.maxConcurrent,
-    maxConcurrentPerRepo: f.maxConcurrentPerRepo,
-    affinityWindowMs: f.affinityWindowMs,
-    version: f.version,
-    createdBy: f.createdBy ?? undefined,
-  }));
+  const seedFlows: SeedFile["flows"] = flows
+    .filter((f) => f.discipline !== null)
+    .map((f) => ({
+      name: f.name,
+      description: f.description ?? undefined,
+      entitySchema: f.entitySchema ?? undefined,
+      initialState: f.initialState,
+      maxConcurrent: f.maxConcurrent,
+      maxConcurrentPerRepo: f.maxConcurrentPerRepo,
+      affinityWindowMs: f.affinityWindowMs,
+      version: f.version,
+      createdBy: f.createdBy ?? undefined,
+      discipline: f.discipline as string,
+    }));
 
   const seedStates: SeedFile["states"] = flows.flatMap((f) =>
     f.states.map((s) => ({
       name: s.name,
       flowName: f.name,
-      agentRole: s.agentRole ?? undefined,
       modelTier: s.modelTier ?? undefined,
       mode: s.mode,
       promptTemplate: s.promptTemplate ?? undefined,

@@ -175,9 +175,9 @@ export class Engine {
       terminal: false,
     };
 
-    // 7. Create invocation if new state has an agent role
+    // 7. Create invocation if new state has a prompt template
     const newStateDef = flow.states.find((s) => s.name === transition.toState);
-    if (newStateDef?.agentRole) {
+    if (newStateDef?.promptTemplate) {
       const canCreate = await this.checkConcurrency(flow, entity);
       if (canCreate) {
         const [invocations, gateResults] = await Promise.all([
@@ -191,7 +191,6 @@ export class Engine {
           transition.toState,
           build.prompt,
           build.mode,
-          build.agentRole ?? undefined,
           undefined,
           build.systemPrompt || build.userContent
             ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
@@ -259,9 +258,9 @@ export class Engine {
       emittedAt: new Date(),
     });
 
-    // Create invocation if initial state has an agent role
+    // Create invocation if initial state has a prompt template
     const initialState = flow.states.find((s) => s.name === flow.initialState);
-    if (initialState?.agentRole) {
+    if (initialState?.promptTemplate) {
       const [invocations, gateResults] = await Promise.all([
         this.invocationRepo.findByEntity(entity.id),
         this.gateRepo.resultsFor(entity.id),
@@ -273,7 +272,6 @@ export class Engine {
         flow.initialState,
         build.prompt,
         build.mode,
-        build.agentRole ?? undefined,
         undefined,
         build.systemPrompt || build.userContent
           ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
@@ -405,8 +403,8 @@ export class Engine {
       }
 
       // No pre-existing unclaimed invocations — claim entity directly and create invocation
-      // Filter states whose agentRole matches the requesting role to prevent cross-role work theft
-      const claimableStates = flow.states.filter((s) => s.agentRole === role);
+      // Discipline filtering already happened at the flow level; any state with a prompt template is claimable
+      const claimableStates = flow.states.filter((s) => !!s.promptTemplate);
       for (const state of claimableStates) {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
         if (claimed) {
@@ -429,7 +427,6 @@ export class Engine {
             state.name,
             build.prompt,
             build.mode,
-            build.agentRole ?? undefined,
             undefined,
             build.systemPrompt || build.userContent
               ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
