@@ -274,7 +274,11 @@ export class Engine {
         if (claimed) {
           const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
           if (!claimedInvocation) {
-            await this.entityRepo.release(claimed.id);
+            try {
+              await this.entityRepo.release(claimed.id, `agent:${role}`);
+            } catch (err) {
+              console.error(`release() failed for entity ${claimed.id}:`, err);
+            }
             continue;
           }
 

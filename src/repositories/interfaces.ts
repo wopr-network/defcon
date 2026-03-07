@@ -205,7 +205,7 @@ export interface IEntityRepository {
   claim(flowId: string, state: string, agentId: string): Promise<Entity | null>;
 
   /** Release a claimed entity, clearing claimedBy and claimedAt. */
-  release(entityId: string): Promise<void>;
+  release(entityId: string, agentId: string): Promise<void>;
 
   /** Find entities whose claim has expired beyond ttlMs and release them. Returns the IDs of released entities. */
   reapExpired(ttlMs: number): Promise<string[]>;
