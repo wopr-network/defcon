@@ -64,6 +64,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     affinityWindowMs: r.affinityWindowMs ?? 300000,
     version: r.version ?? 1,
     createdBy: r.createdBy ?? null,
+    discipline: r.discipline ?? null,
     createdAt: toDate(r.createdAt),
     updatedAt: toDate(r.updatedAt),
     states,
@@ -104,6 +105,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       affinityWindowMs: input.affinityWindowMs ?? 300000,
       version: 1,
       createdBy: input.createdBy ?? null,
+      discipline: input.discipline ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -147,6 +149,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.affinityWindowMs !== undefined) updateValues.affinityWindowMs = changes.affinityWindowMs;
     if (changes.version !== undefined) updateValues.version = changes.version;
     if (changes.createdBy !== undefined) updateValues.createdBy = changes.createdBy;
+    if (changes.discipline !== undefined) updateValues.discipline = changes.discipline;
 
     this.db.update(flowDefinitions).set(updateValues).where(eq(flowDefinitions.id, id)).run();
 

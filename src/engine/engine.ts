@@ -284,9 +284,11 @@ export class Engine {
     let flows: Flow[];
     if (flowName) {
       const flow = await this.flowRepo.getByName(flowName);
-      flows = flow ? [flow] : [];
+      // Validate discipline match — null discipline flows are claimable by any role
+      flows = flow && (flow.discipline === null || flow.discipline === role) ? [flow] : [];
     } else {
-      flows = await this.flowRepo.listAll();
+      const allFlows = await this.flowRepo.listAll();
+      flows = allFlows.filter((f) => f.discipline === null || f.discipline === role);
     }
 
     for (const flow of flows) {
@@ -346,7 +348,7 @@ export class Engine {
 
       // Prefer claiming an existing unclaimed invocation created by processSignal
       // to avoid creating a duplicate. Fall back to creating a new one if none exist.
-      const unclaimed = await this.invocationRepo.findUnclaimed(flow.id, role);
+      const unclaimed = await this.invocationRepo.findUnclaimedByFlow(flow.id);
 
       for (const pending of unclaimed) {
         const claimed = await this.entityRepo.claim(flow.id, pending.stage, `agent:${role}`);
@@ -399,6 +401,7 @@ export class Engine {
       }
 
       // No pre-existing unclaimed invocations — claim entity directly and create invocation
+      // Filter states whose agentRole matches the requesting role to prevent cross-role work theft
       const claimableStates = flow.states.filter((s) => s.agentRole === role);
       for (const state of claimableStates) {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);

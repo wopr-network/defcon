@@ -64,6 +64,7 @@ function makeFlow(overrides: Partial<Flow> = {}): Flow {
     maxConcurrent: 0,
     maxConcurrentPerRepo: 0,
     affinityWindowMs: 300000,
+    discipline: null,
     version: 1,
     createdBy: null,
     createdAt: null,
@@ -136,6 +137,7 @@ function makeInvocationRepo(overrides: Partial<IInvocationRepository> = {}): IIn
     fail: vi.fn(),
     findByEntity: vi.fn().mockResolvedValue([]),
     findUnclaimed: vi.fn().mockResolvedValue([]),
+    findUnclaimedByFlow: vi.fn().mockResolvedValue([]),
     findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]),
     findByFlow: vi.fn().mockResolvedValue([]),
     reapExpired: vi.fn().mockResolvedValue([]),
@@ -252,7 +254,7 @@ describe("worker affinity — claim priority", () => {
 
     const invocationRepo = makeInvocationRepo({
       findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]), // expired — no match
-      findUnclaimed: vi.fn().mockResolvedValue([inv]),
+      findUnclaimedByFlow: vi.fn().mockResolvedValue([inv]),
       claim: vi.fn().mockResolvedValue(inv),
     });
 
@@ -268,7 +270,7 @@ describe("worker affinity — claim priority", () => {
     expect(result).not.toBeNull();
     // Affinity query returned empty; fell through to open pool
     expect(invocationRepo.findUnclaimedWithAffinity).toHaveBeenCalled();
-    expect(invocationRepo.findUnclaimed).toHaveBeenCalled();
+    expect(invocationRepo.findUnclaimedByFlow).toHaveBeenCalled();
   });
 
   it("discipline boundary handoff records new affinity worker", async () => {
@@ -305,7 +307,7 @@ describe("worker affinity — claim priority", () => {
 
     const invocationRepo = makeInvocationRepo({
       findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]),
-      findUnclaimed: vi.fn().mockResolvedValue([inv]),
+      findUnclaimedByFlow: vi.fn().mockResolvedValue([inv]),
       claim: vi.fn().mockResolvedValue(inv),
     });
 
@@ -329,7 +331,7 @@ describe("worker affinity — claim priority", () => {
     const flow = makeFlow();
 
     const invocationRepo = makeInvocationRepo({
-      findUnclaimed: vi.fn().mockResolvedValue([inv]),
+      findUnclaimedByFlow: vi.fn().mockResolvedValue([inv]),
       claim: vi.fn().mockResolvedValue(inv),
     });
 

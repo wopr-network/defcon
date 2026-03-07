@@ -123,6 +123,14 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     return toInvocation(row[0]);
   }
 
+  async releaseClaim(id: string): Promise<void> {
+    this.db
+      .update(invocations)
+      .set({ claimedBy: null, claimedAt: null })
+      .where(and(eq(invocations.id, id), isNull(invocations.completedAt), isNull(invocations.failedAt)))
+      .run();
+  }
+
   async findByEntity(entityId: string): Promise<Invocation[]> {
     const rows = this.db
       .select()
@@ -168,6 +176,24 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
           eq(entities.affinityWorkerId, workerId),
           eq(entities.affinityRole, role),
           sql`${entities.affinityExpiresAt} > ${now}`,
+        ),
+      )
+      .all();
+    return rows.map((r) => toInvocation(r.inv));
+  }
+
+  async findUnclaimedByFlow(flowId: string): Promise<Invocation[]> {
+    const rows = this.db
+      .select({ inv: invocations })
+      .from(invocations)
+      .innerJoin(entities, eq(invocations.entityId, entities.id))
+      .where(
+        and(
+          eq(entities.flowId, flowId),
+          isNotNull(invocations.agentRole),
+          isNull(invocations.claimedBy),
+          isNull(invocations.completedAt),
+          isNull(invocations.failedAt),
         ),
       )
       .all();

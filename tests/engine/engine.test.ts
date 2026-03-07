@@ -20,7 +20,7 @@ function makeEntity(overrides: Partial<Entity> = {}): Entity {
   return {
     id: "ent-1", flowId: "flow-1", state: "open",
     refs: null, artifacts: null, claimedBy: null, claimedAt: null,
-    flowVersion: 1, createdAt: new Date(), updatedAt: new Date(),
+    flowVersion: 1, priority: 0, createdAt: new Date(), updatedAt: new Date(),
     affinityWorkerId: null, affinityRole: null, affinityExpiresAt: null,
     ...overrides,
   };
@@ -39,7 +39,7 @@ function makeFlow(overrides: Partial<Flow> = {}): Flow {
   return {
     id: "flow-1", name: "test-flow", description: null, entitySchema: null,
     initialState: "open", maxConcurrent: 0, maxConcurrentPerRepo: 0, affinityWindowMs: 300000,
-    version: 1, createdBy: null, createdAt: null, updatedAt: null,
+    version: 1, createdBy: null, discipline: "coder", createdAt: null, updatedAt: null,
     states: [
       makeState({ name: "open", agentRole: "planner", promptTemplate: "Plan" }),
       makeState({ name: "coding", agentRole: "coder", promptTemplate: "Code" }),
@@ -74,6 +74,7 @@ function makeMockRepos() {
     ),
     updateArtifacts: vi.fn().mockResolvedValue(undefined),
     claim: vi.fn().mockResolvedValue(null),
+    claimById: vi.fn().mockResolvedValue(null),
     release: vi.fn().mockResolvedValue(undefined),
     reapExpired: vi.fn().mockResolvedValue([]),
     setAffinity: vi.fn().mockResolvedValue(undefined),
@@ -107,6 +108,8 @@ function makeMockRepos() {
     findByEntity: vi.fn().mockResolvedValue([]),
     findUnclaimed: vi.fn().mockResolvedValue([]),
     findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]),
+    findUnclaimedByFlow: vi.fn().mockResolvedValue([]),
+    findUnclaimedActive: vi.fn().mockResolvedValue([]),
     findByFlow: vi.fn().mockResolvedValue([]),
     reapExpired: vi.fn().mockResolvedValue([]),
     countActiveByFlow: vi.fn().mockResolvedValue(0),
@@ -425,8 +428,8 @@ describe("Engine", () => {
         failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 1800000,
       };
 
-      // findUnclaimed returns a pending invocation
-      (mocks.invocationRepo.findUnclaimed as ReturnType<typeof vi.fn>).mockResolvedValue([unclaimedInvocation]);
+      // findUnclaimedByFlow returns a pending invocation
+      (mocks.invocationRepo.findUnclaimedByFlow as ReturnType<typeof vi.fn>).mockResolvedValue([unclaimedInvocation]);
       // Entity claim succeeds on first call (for pre-existing invocation path), then null (for direct-claim path)
       (mocks.entityRepo.claim as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(claimedEntity)
@@ -570,7 +573,7 @@ describe("Engine", () => {
         failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 1800000,
       };
       const claimedEntity = makeEntity({ state: "coding", claimedBy: "agent:coder" });
-      (mocks.invocationRepo.findUnclaimed as ReturnType<typeof vi.fn>).mockResolvedValue([pendingInvocation]);
+      (mocks.invocationRepo.findUnclaimedByFlow as ReturnType<typeof vi.fn>).mockResolvedValue([pendingInvocation]);
       (mocks.entityRepo.claim as ReturnType<typeof vi.fn>).mockResolvedValue(claimedEntity);
       (mocks.invocationRepo.claim as ReturnType<typeof vi.fn>).mockResolvedValue({
         ...pendingInvocation, claimedBy: "agent:coder",

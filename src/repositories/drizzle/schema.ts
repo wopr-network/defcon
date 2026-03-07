@@ -13,6 +13,7 @@ export const flowDefinitions = sqliteTable("flow_definitions", {
   affinityWindowMs: integer("affinity_window_ms").default(300000),
   version: integer("version").default(1),
   createdBy: text("created_by"),
+  discipline: text("discipline"),
   createdAt: integer("created_at"),
   updatedAt: integer("updated_at"),
 });
@@ -95,6 +96,7 @@ export const entities = sqliteTable(
     claimedBy: text("claimed_by"),
     claimedAt: integer("claimed_at"),
     flowVersion: integer("flow_version"),
+    priority: integer("priority").default(0),
     createdAt: integer("created_at"),
     updatedAt: integer("updated_at"),
     affinityWorkerId: text("affinity_worker_id"),

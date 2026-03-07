@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 
 export const FlowClaimSchema = z.object({
+  workerId: z.string().min(1).optional(),
   role: z.string().min(1),
   flow: z.string().min(1).optional(),
   worker_id: z.string().min(1).optional(),

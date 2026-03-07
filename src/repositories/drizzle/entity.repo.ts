@@ -19,6 +19,7 @@ export class DrizzleEntityRepository implements IEntityRepository {
       claimedBy: row.claimedBy,
       claimedAt: row.claimedAt ? new Date(row.claimedAt) : null,
       flowVersion: row.flowVersion ?? 1,
+      priority: row.priority ?? 0,
       createdAt: new Date(row.createdAt ?? 0),
       updatedAt: new Date(row.updatedAt ?? 0),
       affinityWorkerId: row.affinityWorkerId ?? null,
@@ -132,10 +133,10 @@ export class DrizzleEntityRepository implements IEntityRepository {
       .update(entities)
       .set({ claimedBy: agentId, claimedAt: now, updatedAt: now })
       .where(and(eq(entities.id, entityId), isNull(entities.claimedBy)))
-      .returning()
-      .all();
-    if (result.length === 0) return null;
-    return this.toEntity(result[0]);
+      .run();
+    if (result.changes === 0) return null;
+    const rows = this.db.select().from(entities).where(eq(entities.id, entityId)).limit(1).all();
+    return rows.length > 0 ? this.toEntity(rows[0]) : null;
   }
 
   async release(entityId: string, agentId: string): Promise<void> {

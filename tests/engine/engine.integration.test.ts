@@ -224,7 +224,7 @@ describe("Engine integration (in-memory SQLite)", () => {
       engine: ctx.engine,
     };
 
-    const claimResult = await callToolHandler(mcpDeps, "flow.claim", { role: "coder" });
+    const claimResult = await callToolHandler(mcpDeps, "flow.claim", { workerId: "wkr_test", role: "coder" });
     expect(claimResult.isError).toBeUndefined();
     const claimData = JSON.parse(claimResult.content[0].text) as {
       entity_id: string;

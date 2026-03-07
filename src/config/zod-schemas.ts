@@ -14,6 +14,7 @@ export const FlowDefinitionSchema = z.object({
   affinityWindowMs: z.number().int().min(0).optional().default(300000),
   version: z.number().int().min(1).optional().default(1),
   createdBy: z.string().optional(),
+  discipline: z.string().min(1).optional(),
 });
 
 export const StateDefinitionSchema = z.object({

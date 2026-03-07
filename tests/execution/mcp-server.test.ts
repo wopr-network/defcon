@@ -26,6 +26,7 @@ function mockEntity(overrides: Partial<Entity> = {}): Entity {
     claimedBy: null,
     claimedAt: null,
     flowVersion: 1,
+    priority: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -65,6 +66,7 @@ function mockFlow(overrides: Partial<Flow> = {}): Flow {
     maxConcurrentPerRepo: 0,
     version: 1,
     createdBy: null,
+    discipline: null,
     createdAt: null,
     updatedAt: null,
     states: [
@@ -139,8 +141,12 @@ function createMockDeps(): McpServerDeps {
     transition: async (_id, toState) => mockEntity({ state: toState }),
     updateArtifacts: async () => {},
     claim: async () => mockEntity({ claimedBy: "agent-1" }),
+    claimById: async (id) => mockEntity({ id, claimedBy: "agent-1" }),
     reapExpired: async () => [],
     release: async () => {},
+    setAffinity: async () => {},
+    clearExpiredAffinity: async () => [],
+    appendSpawnedChild: async () => {},
   };
 
   const flows: IFlowRepository = {
@@ -183,6 +189,7 @@ function createMockDeps(): McpServerDeps {
       mockInvocation({ claimedBy: "coder", claimedAt: new Date() }),
     ],
     findUnclaimed: async () => [mockInvocation()],
+    findUnclaimedByFlow: async () => [mockInvocation()],
     findByFlow: async () => [],
     findUnclaimedActive: async () => [],
     reapExpired: async () => [],
@@ -255,6 +262,11 @@ describe("MCP tool handlers", () => {
 
   beforeEach(() => {
     deps = createMockDeps();
+    // Default flow for existing tests has discipline "coder" so flow.claim with role "coder" works
+    const coderFlow = mockFlow({ discipline: "coder" });
+    deps.flows.getByName = async (name) => (name === "test-flow" ? coderFlow : null);
+    deps.flows.list = async () => [coderFlow];
+    deps.flows.listAll = async () => [coderFlow];
   });
 
   async function callTool(toolName: string, args: Record<string, unknown>) {
@@ -326,7 +338,7 @@ describe("MCP tool handlers", () => {
   });
 
   it("flow.claim returns invocation when work available", async () => {
-    const result = await callTool("flow.claim", { role: "coder", flow: "test-flow" });
+    const result = await callTool("flow.claim", { workerId: "wkr_test", role: "coder", flow: "test-flow" });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data).toHaveProperty("entity_id");
@@ -335,14 +347,15 @@ describe("MCP tool handlers", () => {
   });
 
   it("flow.claim returns null when no work available", async () => {
-    deps.invocations.findUnclaimed = async () => [];
-    const result = await callTool("flow.claim", { role: "coder", flow: "test-flow" });
+    deps.invocations.findUnclaimedByFlow = async () => [];
+    const result = await callTool("flow.claim", { workerId: "wkr_test", role: "coder", flow: "test-flow" });
     const content = result.content as Array<{ type: string; text: string }>;
     expect(JSON.parse(content[0].text)).toBeNull();
   });
 
   it("flow.claim returns error for unknown flow", async () => {
     const result = await callTool("flow.claim", {
+      workerId: "wkr_test",
       role: "coder",
       flow: "nonexistent",
     });
@@ -450,7 +463,7 @@ describe("MCP tool handlers", () => {
 
   // Finding 2: flow.claim with no flow searches all flows
   it("flow.claim without flow param searches all flows", async () => {
-    const result = await callTool("flow.claim", { role: "coder" });
+    const result = await callTool("flow.claim", { workerId: "wkr_test", role: "coder" });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     // Should find work via list() rather than returning an error
@@ -482,16 +495,17 @@ describe("MCP tool handlers", () => {
 
   // Finding 4: flow.claim iterates candidates on race condition (claim() returns null for first)
   it("flow.claim tries next candidate when first claim fails (race condition)", async () => {
-    const inv1 = mockInvocation({ id: "inv-1" });
-    const inv2 = mockInvocation({ id: "inv-2" });
-    deps.invocations.findUnclaimed = async () => [inv1, inv2];
+    const inv1 = mockInvocation({ id: "inv-1", entityId: "ent-1" });
+    const inv2 = mockInvocation({ id: "inv-2", entityId: "ent-2" });
+    deps.invocations.findUnclaimedByFlow = async () => [inv1, inv2];
+    deps.entities.get = async (id) => mockEntity({ id, flowId: "flow-1" });
     let callCount = 0;
-    deps.invocations.claim = async (id, role) => {
+    deps.invocations.claim = async (id, _role) => {
       callCount++;
       if (id === "inv-1") return null; // lost the race on first candidate
-      return mockInvocation({ id, claimedBy: role, claimedAt: new Date() });
+      return mockInvocation({ id, entityId: "ent-2", claimedBy: _role, claimedAt: new Date() });
     };
-    const result = await callTool("flow.claim", { role: "coder", flow: "test-flow" });
+    const result = await callTool("flow.claim", { workerId: "wkr_test", role: "coder", flow: "test-flow" });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data).not.toBeNull();
@@ -625,17 +639,22 @@ describe("MCP tool handlers", () => {
 
   // Zod validation tests
   it("flow.claim rejects empty role", async () => {
-    const result = await callTool("flow.claim", { role: "" });
+    const result = await callTool("flow.claim", { workerId: "wkr_test", role: "" });
     expect(result.isError).toBe(true);
     const text = (result.content as Array<{ text: string }>)[0].text;
     expect(text).toContain("Validation error");
   });
 
   it("flow.claim rejects missing role", async () => {
-    const result = await callTool("flow.claim", {});
+    const result = await callTool("flow.claim", { workerId: "wkr_test" });
     expect(result.isError).toBe(true);
     const text = (result.content as Array<{ text: string }>)[0].text;
     expect(text).toContain("Validation error");
+  });
+
+  it("flow.claim accepts missing workerId (affinity is best-effort)", async () => {
+    const result = await callTool("flow.claim", { role: "coder", flow: "test-flow" });
+    expect(result.isError).toBeFalsy();
   });
 
   it("flow.get_prompt rejects missing entity_id", async () => {
@@ -809,6 +828,12 @@ describe("MCP integration: claim -> report -> verify", () => {
 
     const deps = createMockDeps();
 
+    // Set up a flow with discipline "coder" for the integration test
+    const coderFlow = mockFlow({ discipline: "coder" });
+    deps.flows.getByName = async (name) => (name === "test-flow" ? coderFlow : null);
+    deps.flows.list = async () => [coderFlow];
+    deps.flows.listAll = async () => [coderFlow];
+
     deps.entities.get = async (id) => {
       if (id !== "ent-1") return null;
       return mockEntity({ state: currentState });
@@ -836,7 +861,7 @@ describe("MCP integration: claim -> report -> verify", () => {
     // Step 1: Claim work
     const claimResult = await client.callTool({
       name: "flow.claim",
-      arguments: { role: "coder", flow: "test-flow" },
+      arguments: { workerId: "wkr_test", role: "coder", flow: "test-flow" },
     });
     const claimData = JSON.parse(
       (claimResult.content as Array<{ text: string }>)[0].text,
@@ -869,5 +894,186 @@ describe("MCP integration: claim -> report -> verify", () => {
 
     await client.close();
     await server.close();
+  });
+});
+
+describe("flow.claim discipline routing (WOP-1890)", () => {
+  let deps: McpServerDeps;
+
+  beforeEach(() => {
+    deps = createMockDeps();
+  });
+
+  async function callClaim(args: Record<string, unknown>) {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const server = createMcpServer(deps);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test-client", version: "0.1.0" });
+    await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+    const result = await client.callTool({ name: "flow.claim", arguments: args });
+    await client.close();
+    await server.close();
+    return result;
+  }
+
+  function parseResult(result: { content: Array<{ text: string }> }) {
+    return JSON.parse(result.content[0].text);
+  }
+
+  it("filters flows by discipline matching role", async () => {
+    const engFlow = mockFlow({ id: "flow-eng", name: "feature-dev", discipline: "engineering" });
+    const devopsFlow = mockFlow({ id: "flow-ops", name: "deploy", discipline: "devops" });
+    deps.flows.list = async () => [engFlow, devopsFlow];
+    deps.flows.listAll = async () => [engFlow, devopsFlow];
+    const queriedFlowIds: string[] = [];
+    deps.invocations.findUnclaimedByFlow = async (flowId) => {
+      queriedFlowIds.push(flowId);
+      if (flowId === "flow-eng") return [mockInvocation({ id: "inv-eng", entityId: "ent-eng" })];
+      return [];
+    };
+    deps.entities.get = async (id) => mockEntity({ id, flowId: "flow-eng" });
+    deps.invocations.claim = async (id) =>
+      mockInvocation({ id, entityId: "ent-eng", claimedBy: "wkr_test", claimedAt: new Date() });
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+
+    expect(data).not.toBeNull();
+    expect(queriedFlowIds).toContain("flow-eng");
+    expect(queriedFlowIds).not.toContain("flow-ops");
+  });
+
+  it("engineering worker cannot claim devops flow entities", async () => {
+    const devopsFlow = mockFlow({ id: "flow-ops", name: "deploy", discipline: "devops" });
+    deps.flows.list = async () => [devopsFlow];
+    deps.flows.listAll = async () => [devopsFlow];
+    deps.invocations.findUnclaimedByFlow = async () => [mockInvocation()];
+
+    const result = await callClaim({ workerId: "wkr_eng", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).toBeNull();
+  });
+
+  it("claims across all matching-discipline flows when flow param omitted", async () => {
+    const flow1 = mockFlow({ id: "flow-1", name: "bugs", discipline: "engineering" });
+    const flow2 = mockFlow({ id: "flow-2", name: "features", discipline: "engineering" });
+    deps.flows.list = async () => [flow1, flow2];
+    deps.flows.listAll = async () => [flow1, flow2];
+    deps.invocations.findUnclaimedByFlow = async (flowId) => {
+      if (flowId === "flow-2") return [mockInvocation({ id: "inv-f2", entityId: "ent-f2" })];
+      return [];
+    };
+    deps.entities.get = async (id) => mockEntity({ id, flowId: "flow-2" });
+    deps.invocations.claim = async (id) =>
+      mockInvocation({ id, entityId: "ent-f2", claimedBy: "wkr_test", claimedAt: new Date() });
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).not.toBeNull();
+    expect(data.invocation_id).toBe("inv-f2");
+  });
+
+  it("selects higher-priority entity over lower-priority", async () => {
+    const flow1 = mockFlow({ id: "flow-1", name: "eng-flow", discipline: "engineering" });
+    deps.flows.list = async () => [flow1];
+    deps.flows.listAll = async () => [flow1];
+
+    const lowPriInv = mockInvocation({ id: "inv-low", entityId: "ent-low" });
+    const highPriInv = mockInvocation({ id: "inv-high", entityId: "ent-high" });
+    deps.invocations.findUnclaimedByFlow = async () => [lowPriInv, highPriInv];
+
+    deps.entities.get = async (id) => {
+      if (id === "ent-low") return mockEntity({ id: "ent-low", flowId: "flow-1", priority: 1 });
+      if (id === "ent-high") return mockEntity({ id: "ent-high", flowId: "flow-1", priority: 5 });
+      return null;
+    };
+    deps.invocations.claim = async (id) =>
+      mockInvocation({ id, entityId: id === "inv-high" ? "ent-high" : "ent-low", claimedBy: "wkr_test", claimedAt: new Date() });
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).not.toBeNull();
+    expect(data.invocation_id).toBe("inv-high");
+  });
+
+  it("prefers entity with worker affinity over higher-priority entity", async () => {
+    const flow1 = mockFlow({ id: "flow-1", name: "eng-flow", discipline: "engineering" });
+    deps.flows.list = async () => [flow1];
+    deps.flows.listAll = async () => [flow1];
+
+    const affinityInv = mockInvocation({ id: "inv-affinity", entityId: "ent-affinity" });
+    const highPriInv = mockInvocation({ id: "inv-high", entityId: "ent-high" });
+    deps.invocations.findUnclaimedByFlow = async () => [affinityInv, highPriInv];
+
+    deps.entities.get = async (id) => {
+      if (id === "ent-affinity") return mockEntity({ id: "ent-affinity", flowId: "flow-1", priority: 1, updatedAt: new Date() });
+      if (id === "ent-high") return mockEntity({ id: "ent-high", flowId: "flow-1", priority: 10, updatedAt: new Date() });
+      return null;
+    };
+
+    deps.invocations.findByEntity = async (entityId) => {
+      if (entityId === "ent-affinity") {
+        return [mockInvocation({
+          entityId: "ent-affinity",
+          claimedBy: "wkr_test",
+          completedAt: new Date(Date.now() - 30 * 60 * 1000),
+        })];
+      }
+      return [];
+    };
+
+    deps.invocations.claim = async (id) =>
+      mockInvocation({ id, entityId: "ent-affinity", claimedBy: "wkr_test", claimedAt: new Date() });
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).not.toBeNull();
+    expect(data.invocation_id).toBe("inv-affinity");
+  });
+
+  it("selects entity waiting longest when priorities are equal", async () => {
+    const flow1 = mockFlow({ id: "flow-1", name: "eng-flow", discipline: "engineering" });
+    deps.flows.list = async () => [flow1];
+    deps.flows.listAll = async () => [flow1];
+
+    const recentInv = mockInvocation({ id: "inv-recent", entityId: "ent-recent" });
+    const oldInv = mockInvocation({ id: "inv-old", entityId: "ent-old" });
+    deps.invocations.findUnclaimedByFlow = async () => [recentInv, oldInv];
+
+    deps.entities.get = async (id) => {
+      if (id === "ent-recent") return mockEntity({ id: "ent-recent", flowId: "flow-1", priority: 3, createdAt: new Date(Date.now() - 5 * 60 * 1000), updatedAt: new Date(Date.now() - 5 * 60 * 1000) });
+      if (id === "ent-old") return mockEntity({ id: "ent-old", flowId: "flow-1", priority: 3, createdAt: new Date(Date.now() - 60 * 60 * 1000), updatedAt: new Date(Date.now() - 60 * 60 * 1000) });
+      return null;
+    };
+
+    deps.invocations.claim = async (id) =>
+      mockInvocation({ id, entityId: id === "inv-old" ? "ent-old" : "ent-recent", claimedBy: "wkr_test", claimedAt: new Date() });
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).not.toBeNull();
+    expect(data.invocation_id).toBe("inv-old");
+  });
+
+  it("returns null when no entities available for discipline", async () => {
+    const flow1 = mockFlow({ id: "flow-1", name: "eng-flow", discipline: "engineering" });
+    deps.flows.list = async () => [flow1];
+    deps.flows.listAll = async () => [flow1];
+    deps.invocations.findUnclaimedByFlow = async () => [];
+
+    const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).toBeNull();
+  });
+
+  it("flow param validates discipline match and returns null on mismatch", async () => {
+    const devopsFlow = mockFlow({ id: "flow-ops", name: "deploy", discipline: "devops" });
+    deps.flows.getByName = async (name) => (name === "deploy" ? devopsFlow : null);
+
+    const result = await callClaim({ workerId: "wkr_eng", role: "engineering", flow: "deploy" });
+    const data = parseResult(result as { content: Array<{ text: string }> });
+    expect(data).toBeNull();
+    expect((result as { isError?: boolean }).isError).toBeUndefined();
   });
 });

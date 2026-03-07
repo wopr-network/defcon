@@ -92,6 +92,7 @@ async function parseSeedAndLoad(
         maxConcurrent: f.maxConcurrent,
         maxConcurrentPerRepo: f.maxConcurrentPerRepo,
         createdBy: f.createdBy,
+        discipline: f.discipline,
       });
 
       const flowStates = parsed.states.filter((s) => s.flowName === f.name);

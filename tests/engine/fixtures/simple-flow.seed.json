@@ -5,7 +5,8 @@
       "description": "3-state test flow: backlog -> coding -> done",
       "initialState": "backlog",
       "maxConcurrent": 0,
-      "maxConcurrentPerRepo": 0
+      "maxConcurrentPerRepo": 0,
+      "discipline": "coder"
     }
   ],
   "states": [

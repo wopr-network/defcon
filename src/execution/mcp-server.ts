@@ -58,13 +58,13 @@ const TOOL_DEFINITIONS = [
   {
     name: "flow.claim",
     description:
-      "Claim the next available work item for a given agent role. Returns entity_id, invocation_id, prompt, and context — or null if no work is available.",
+      "Claim the next available work item for a given discipline role. DEFCON selects the highest-priority entity across all matching flows. Returns entity_id, invocation_id, flow, stage, prompt — or null if no work is available.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        role: { type: "string", description: "Agent role to claim work for" },
-        flow: { type: "string", description: "Optional flow name to filter by" },
-        worker_id: { type: "string", description: "Optional stable worker identifier for affinity routing" },
+        workerId: { type: "string", description: "Unique worker identifier for affinity tracking" },
+        role: { type: "string", description: "Discipline role (e.g. engineering, devops, qa, security)" },
+        flow: { type: "string", description: "Optional flow name to restrict claim to a single flow" },
       },
       required: ["role"],
     },
@@ -169,6 +169,11 @@ const TOOL_DEFINITIONS = [
       properties: {
         name: { type: "string", description: "Unique flow name" },
         initialState: { type: "string", description: "Name of the initial state (must be in states array)" },
+        discipline: {
+          type: "string",
+          description:
+            "Discipline role required to claim work in this flow (e.g. engineering, devops). Null means any role can claim.",
+        },
         description: { type: "string", description: "Flow description" },
         entitySchema: { type: "object", description: "JSON schema for entity data" },
         maxConcurrent: { type: "number", description: "Max concurrent entities (0=unlimited)" },
@@ -192,6 +197,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         flow_name: { type: "string", description: "Flow name to update" },
         description: { type: "string" },
+        discipline: { type: "string", description: "Discipline role required to claim work in this flow" },
         maxConcurrent: { type: "number" },
         maxConcurrentPerRepo: { type: "number" },
         affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },
@@ -428,108 +434,128 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 // ─── Tool Handlers ───
 
+const AFFINITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
 async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowClaimSchema, args);
   if (!v.ok) return v.result;
-  const { role, flow: flowName, worker_id: workerId } = v.data;
+  const { workerId, role, flow: flowName } = v.data;
 
-  let candidates: import("../repositories/interfaces.js").Invocation[] = [];
-  let affinityCandidatesUsed = false;
-  let flowForFallback: Awaited<ReturnType<typeof deps.flows.getByName>> | null = null;
+  // 1. Find candidate flows filtered by discipline
+  let candidateFlows: import("../repositories/interfaces.js").Flow[] = [];
 
   if (flowName) {
     const flow = await deps.flows.getByName(flowName);
     if (!flow) return errorResult(`Flow not found: ${flowName}`);
-    flowForFallback = flow;
-    // Try affinity-matched candidates first if workerId is provided
-    if (workerId) {
-      candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
-      if (candidates.length > 0) affinityCandidatesUsed = true;
-    }
-    if (candidates.length === 0) {
-      candidates = await deps.invocations.findUnclaimed(flow.id, role);
-    }
+    // Discipline must match — null discipline flows are claimable by any role
+    if (flow.discipline !== null && flow.discipline !== role) return jsonResult(null);
+    candidateFlows = [flow];
   } else {
-    // No flow specified — search all flows for a claimable entity with this role
     const allFlows = await deps.flows.list();
-    for (const flow of allFlows) {
-      candidates = [];
-      if (workerId) {
-        candidates = await deps.invocations.findUnclaimedWithAffinity(flow.id, role, workerId);
-        if (candidates.length > 0) {
-          affinityCandidatesUsed = true;
-          flowForFallback = flow;
-        }
-      }
-      if (candidates.length === 0) {
-        const unclaimed = await deps.invocations.findUnclaimed(flow.id, role);
-        candidates.push(...unclaimed);
-      }
-      if (candidates.length > 0) break;
-    }
+    candidateFlows = allFlows.filter((f) => f.discipline === null || f.discipline === role);
   }
 
-  if (candidates.length === 0) return jsonResult(null);
+  if (candidateFlows.length === 0) return jsonResult(null);
 
-  // Iterate candidates to handle race conditions: try each until one succeeds
-  for (const invocation of candidates) {
+  // 2. Gather all unclaimed invocations across matching flows
+  type CandidateInvocation = import("../repositories/interfaces.js").Invocation;
+  const allCandidates: CandidateInvocation[] = [];
+  for (const flow of candidateFlows) {
+    const unclaimed = await deps.invocations.findUnclaimedByFlow(flow.id);
+    allCandidates.push(...unclaimed);
+  }
+
+  if (allCandidates.length === 0) return jsonResult(null);
+
+  // 3. Load entities for priority sorting
+  const entityMap = new Map<string, import("../repositories/interfaces.js").Entity>();
+  const uniqueEntityIds = [...new Set(allCandidates.map((inv) => inv.entityId))];
+  await Promise.all(
+    uniqueEntityIds.map(async (eid) => {
+      const entity = await deps.entities.get(eid);
+      if (entity) entityMap.set(eid, entity);
+    }),
+  );
+
+  // 4. Check affinity for each entity
+  const affinitySet = new Set<string>();
+  const now = Date.now();
+  if (workerId) {
+    await Promise.all(
+      uniqueEntityIds.map(async (eid) => {
+        const invocations = await deps.invocations.findByEntity(eid);
+        const lastCompleted = invocations
+          .filter((inv) => inv.completedAt !== null && inv.claimedBy === workerId)
+          .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
+        if (lastCompleted.length > 0) {
+          const elapsed = now - (lastCompleted[0].completedAt?.getTime() ?? 0);
+          if (elapsed < AFFINITY_WINDOW_MS) {
+            affinitySet.add(eid);
+          }
+        }
+      }),
+    );
+  }
+
+  // 5. Sort candidates by priority algorithm
+  allCandidates.sort((a, b) => {
+    const entityA = entityMap.get(a.entityId);
+    const entityB = entityMap.get(b.entityId);
+
+    // Tier 1: Affinity (has affinity sorts first)
+    const affinityA = affinitySet.has(a.entityId) ? 1 : 0;
+    const affinityB = affinitySet.has(b.entityId) ? 1 : 0;
+    if (affinityA !== affinityB) return affinityB - affinityA;
+
+    // Tier 2: Entity priority (higher priority sorts first)
+    const priA = entityA?.priority ?? 0;
+    const priB = entityB?.priority ?? 0;
+    if (priA !== priB) return priB - priA;
+
+    // Tier 3: Time in state (longest waiting sorts first — earlier createdAt as stable proxy)
+    const timeA = entityA?.createdAt?.getTime() ?? now;
+    const timeB = entityB?.createdAt?.getTime() ?? now;
+    return timeA - timeB;
+  });
+
+  // 6. Build a flow lookup map
+  const flowById = new Map(candidateFlows.map((f) => [f.id, f]));
+
+  // 7. Try claiming in priority order (handle race conditions)
+  for (const invocation of allCandidates) {
     let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
     try {
-      claimed = await deps.invocations.claim(invocation.id, role);
+      claimed = await deps.invocations.claim(invocation.id, workerId ?? `agent:${role}`);
     } catch (err) {
       console.error(`Failed to claim invocation ${invocation.id}:`, err);
       continue;
     }
     if (claimed) {
-      // Record affinity for the claiming worker
-      if (workerId) {
-        const entity = await deps.entities.get(claimed.entityId);
-        if (entity) {
-          const flow = await deps.flows.get(entity.flowId);
-          const windowMs = flow?.affinityWindowMs ?? 300000;
-          await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+      const entity = entityMap.get(claimed.entityId);
+      if (entity) {
+        const claimedEntity = await deps.entities.claimById(entity.id, workerId ?? `agent:${role}`);
+        if (!claimedEntity) {
+          // Race condition: another worker claimed this entity first.
+          // Release the invocation claim so it can be picked up by another worker.
+          await deps.invocations.releaseClaim(claimed.id);
+          continue;
         }
       }
+      const flow = entity ? flowById.get(entity.flowId) : undefined;
+      // Record affinity for the claiming worker
+      if (workerId && entity && flow) {
+        const windowMs = flow.affinityWindowMs ?? 300000;
+        await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+      }
       return jsonResult({
+        workerId,
         entity_id: claimed.entityId,
         invocation_id: claimed.id,
+        flow: flow?.name ?? null,
+        stage: claimed.stage,
         prompt: claimed.prompt,
         context: claimed.context,
       });
-    }
-  }
-
-  // All affinity candidates lost the claim race — fall back to open pool
-  if (affinityCandidatesUsed) {
-    // When no flowName was specified, check ALL flows' open pools, not just the one that had affinity matches
-    const fallbackFlows = flowName ? (flowForFallback ? [flowForFallback] : []) : await deps.flows.list();
-    for (const fallbackFlow of fallbackFlows) {
-      const openPool = await deps.invocations.findUnclaimed(fallbackFlow.id, role);
-      for (const invocation of openPool) {
-        let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
-        try {
-          claimed = await deps.invocations.claim(invocation.id, role);
-        } catch (err) {
-          console.error(`Failed to claim invocation ${invocation.id}:`, err);
-          continue;
-        }
-        if (claimed) {
-          if (workerId) {
-            const entity = await deps.entities.get(claimed.entityId);
-            if (entity) {
-              const flow = await deps.flows.get(entity.flowId);
-              const windowMs = flow?.affinityWindowMs ?? 300000;
-              await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
-            }
-          }
-          return jsonResult({
-            entity_id: claimed.entityId,
-            invocation_id: claimed.id,
-            prompt: claimed.prompt,
-            context: claimed.context,
-          });
-        }
-      }
     }
   }
 
