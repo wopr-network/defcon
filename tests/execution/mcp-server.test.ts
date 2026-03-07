@@ -346,11 +346,15 @@ describe("MCP tool handlers", () => {
     expect(data).toHaveProperty("prompt");
   });
 
-  it("flow.claim returns null when no work available", async () => {
+  it("flow.claim returns structured check_back when no work available (empty backlog)", async () => {
     deps.invocations.findUnclaimedByFlow = async () => [];
+    deps.entities.findByFlowAndState = async () => [];
     const result = await callTool("flow.claim", { workerId: "wkr_test", role: "coder", flow: "test-flow" });
     const content = result.content as Array<{ type: string; text: string }>;
-    expect(JSON.parse(content[0].text)).toBeNull();
+    const data = JSON.parse(content[0].text);
+    expect(data.next_action).toBe("check_back");
+    expect(data.retry_after_ms).toBe(300000);
+    expect(data.message).toContain("No work available");
   });
 
   it("flow.claim returns error for unknown flow", async () => {
@@ -952,7 +956,8 @@ describe("flow.claim discipline routing (WOP-1890)", () => {
 
     const result = await callClaim({ workerId: "wkr_eng", role: "engineering" });
     const data = parseResult(result as { content: Array<{ text: string }> });
-    expect(data).toBeNull();
+    expect(data.next_action).toBe("check_back");
+    expect((result as { isError?: boolean }).isError).toBeUndefined();
   });
 
   it("claims across all matching-discipline flows when flow param omitted", async () => {
@@ -1056,15 +1061,17 @@ describe("flow.claim discipline routing (WOP-1890)", () => {
     expect(data.invocation_id).toBe("inv-old");
   });
 
-  it("returns null when no entities available for discipline", async () => {
+  it("returns check_back when no entities available for discipline", async () => {
     const flow1 = mockFlow({ id: "flow-1", name: "eng-flow", discipline: "engineering" });
     deps.flows.list = async () => [flow1];
     deps.flows.listAll = async () => [flow1];
     deps.invocations.findUnclaimedByFlow = async () => [];
+    deps.entities.findByFlowAndState = async () => [];
 
     const result = await callClaim({ workerId: "wkr_test", role: "engineering" });
     const data = parseResult(result as { content: Array<{ text: string }> });
-    expect(data).toBeNull();
+    expect(data.next_action).toBe("check_back");
+    expect(data.retry_after_ms).toBe(300000);
   });
 
   it("flow param validates discipline match and returns null on mismatch", async () => {

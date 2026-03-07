@@ -58,7 +58,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "flow.claim",
     description:
-      "Claim the next available work item for a given discipline role. DEFCON selects the highest-priority entity across all matching flows. Returns entity_id, invocation_id, flow, stage, prompt — or null if no work is available.",
+      "Claim the next available work item for a given discipline role. DEFCON selects the highest-priority entity across all matching flows. Returns entity_id, invocation_id, flow, stage, prompt — or a check_back response with retry_after_ms if no work is available.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -428,6 +428,14 @@ function errorResult(message: string) {
   };
 }
 
+function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jsonResult> {
+  return jsonResult({
+    next_action: "check_back",
+    retry_after_ms: retryAfterMs,
+    message: `No work available for role '${role}' right now. Call flow.claim again after the retry delay.`,
+  });
+}
+
 function constantTimeEqual(a: string, b: string): boolean {
   const hashA = createHash("sha256").update(a.trim()).digest();
   const hashB = createHash("sha256").update(b.trim()).digest();
@@ -457,7 +465,7 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     candidateFlows = allFlows.filter((f) => f.discipline === null || f.discipline === role);
   }
 
-  if (candidateFlows.length === 0) return jsonResult(null);
+  if (candidateFlows.length === 0) return noWorkResult(300_000, role);
 
   // 2. Gather all unclaimed invocations across matching flows
   type CandidateInvocation = import("../repositories/interfaces.js").Invocation;
@@ -467,7 +475,22 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     allCandidates.push(...unclaimed);
   }
 
-  if (allCandidates.length === 0) return jsonResult(null);
+  if (allCandidates.length === 0) {
+    // Determine if entities exist but are all claimed (short retry) vs empty backlog (long retry)
+    let hasEntities = false;
+    for (const flow of candidateFlows) {
+      for (const state of flow.states) {
+        if (state.agentRole === null) continue;
+        const entities = await deps.entities.findByFlowAndState(flow.id, state.name);
+        if (entities.length > 0) {
+          hasEntities = true;
+          break;
+        }
+      }
+      if (hasEntities) break;
+    }
+    return noWorkResult(hasEntities ? 30_000 : 300_000, role);
+  }
 
   // 3. Load entities for priority sorting
   const entityMap = new Map<string, import("../repositories/interfaces.js").Entity>();
@@ -561,7 +584,7 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     }
   }
 
-  return jsonResult(null);
+  return noWorkResult(30_000, role);
 }
 
 async function handleFlowGetPrompt(deps: McpServerDeps, args: Record<string, unknown>) {
