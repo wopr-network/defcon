@@ -31,6 +31,7 @@ export const stateDefinitions = sqliteTable(
     mode: text("mode").default("passive"),
     promptTemplate: text("prompt_template"),
     constraints: text("constraints", { mode: "json" }),
+    onEnter: text("on_enter", { mode: "json" }),
   },
   (table) => ({
     flowNameUnique: uniqueIndex("state_definitions_flow_name_unique").on(table.flowId, table.name),

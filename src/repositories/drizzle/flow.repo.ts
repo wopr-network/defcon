@@ -8,6 +8,7 @@ import type {
   FlowVersion,
   IFlowRepository,
   Mode,
+  OnEnterConfig,
   State,
   Transition,
   UpdateFlowInput,
@@ -33,6 +34,7 @@ function rowToState(r: typeof stateDefinitions.$inferSelect): State {
     mode: (r.mode ?? "passive") as Mode,
     promptTemplate: r.promptTemplate ?? null,
     constraints: r.constraints as Record<string, unknown> | null,
+    onEnter: (r.onEnter as OnEnterConfig | null) ?? null,
   };
 }
 
@@ -168,6 +170,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       mode: state.mode ?? "passive",
       promptTemplate: state.promptTemplate ?? null,
       constraints: (state.constraints ?? null) as Record<string, unknown> | null,
+      onEnter: (state.onEnter ?? null) as OnEnterConfig | null,
     };
     this.db.transaction((tx) => {
       tx.insert(stateDefinitions).values(row).run();

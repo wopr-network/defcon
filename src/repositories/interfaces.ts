@@ -6,6 +6,13 @@ export type Refs = Record<string, { adapter: string; id: string; [key: string]: 
 /** Freeform key-value artifact bag */
 export type Artifacts = Record<string, unknown>;
 
+/** Configuration for running a command when an entity enters a state */
+export interface OnEnterConfig {
+  command: string;
+  artifacts: string[];
+  timeout_ms?: number;
+}
+
 /** Invocation execution mode */
 export type Mode = "active" | "passive";
 
@@ -88,6 +95,7 @@ export interface State {
   mode: Mode;
   promptTemplate: string | null;
   constraints: Record<string, unknown> | null;
+  onEnter: OnEnterConfig | null;
 }
 
 /** A transition rule between two states */
@@ -169,6 +177,7 @@ export interface CreateStateInput {
   mode?: Mode;
   promptTemplate?: string;
   constraints?: Record<string, unknown>;
+  onEnter?: OnEnterConfig;
 }
 
 /** Input for adding a transition rule */

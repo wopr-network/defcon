@@ -21,7 +21,10 @@ export type EngineEvent =
   | { type: "gate.failed"; entityId: string; gateId: string; emittedAt: Date }
   | { type: "gate.timedOut"; entityId: string; gateId: string; emittedAt: Date }
   | { type: "flow.spawned"; entityId: string; flowId: string; spawnedFlowId: string; emittedAt: Date }
-  | { type: "definition.changed"; flowId: string; tool: string; payload: Record<string, unknown>; emittedAt: Date };
+  | { type: "definition.changed"; flowId: string; tool: string; payload: Record<string, unknown>; emittedAt: Date }
+  | { type: "onEnter.completed"; entityId: string; state: string; artifacts: Record<string, unknown>; emittedAt: Date }
+  | { type: "onEnter.failed"; entityId: string; state: string; error: string; emittedAt: Date }
+  | { type: "onEnter.skipped"; entityId: string; state: string; emittedAt: Date };
 
 /** Adapter for broadcasting engine events to external systems. */
 export interface IEventBusAdapter {
