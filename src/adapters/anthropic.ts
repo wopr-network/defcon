@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { IAIProviderAdapter } from "./interfaces.js";
+import type { AIInvokeOptions, IAIProviderAdapter } from "./interfaces.js";
 
 const DEFAULT_MODEL_MAP: Record<string, string> = {
   reasoning: "claude-opus-4-6",
@@ -21,12 +21,13 @@ export class AnthropicAdapter implements IAIProviderAdapter {
     this.modelMap = { ...DEFAULT_MODEL_MAP, ...config.modelMap };
   }
 
-  async invoke(prompt: string, config: { model: string }): Promise<{ content: string }> {
+  async invoke(prompt: string, config: AIInvokeOptions): Promise<{ content: string }> {
     const model = this.modelMap[config.model] ?? config.model;
     try {
       const response = await this.client.messages.create({
         model,
         max_tokens: 8192,
+        ...(config.systemPrompt ? { system: config.systemPrompt } : {}),
         messages: [{ role: "user", content: prompt }],
       });
       const content = response.content

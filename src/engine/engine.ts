@@ -171,6 +171,10 @@ export class Engine {
           build.prompt,
           build.mode,
           build.agentRole ?? undefined,
+          undefined,
+          build.systemPrompt || build.userContent
+            ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
+            : undefined,
         );
         result.invocationId = invocation.id;
         await this.eventEmitter.emit({
@@ -249,6 +253,10 @@ export class Engine {
         build.prompt,
         build.mode,
         build.agentRole ?? undefined,
+        undefined,
+        build.systemPrompt || build.userContent
+          ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
+          : undefined,
       );
     }
 
@@ -328,6 +336,10 @@ export class Engine {
             build.prompt,
             build.mode,
             build.agentRole ?? undefined,
+            undefined,
+            build.systemPrompt || build.userContent
+              ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
+              : undefined,
           );
           await this.eventEmitter.emit({
             type: "entity.claimed",

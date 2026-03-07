@@ -69,10 +69,17 @@ export interface ICodeHostAdapter {
   removeWorktree(path: string, localRepoPath: string): Promise<void>;
 }
 
+/** Options for AI model invocation */
+export interface AIInvokeOptions {
+  model: string;
+  /** If provided, sent as system-level instructions separate from user content. */
+  systemPrompt?: string;
+}
+
 /** Adapter for AI model providers (Anthropic, OpenAI, etc.). */
 export interface IAIProviderAdapter {
   /** Send a prompt to an AI model and return the response content. */
-  invoke(prompt: string, config: { model: string }): Promise<{ content: string }>;
+  invoke(prompt: string, config: AIInvokeOptions): Promise<{ content: string }>;
 }
 
 /** Adapter for broadcasting engine events to external systems. */
