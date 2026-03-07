@@ -94,7 +94,7 @@ describe("evaluateGate", () => {
   it("returns passed=true for function gate with valid module", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/passing-gate.ts:check",
+      functionRef: "gates/test/passing-gate.ts:check",
     });
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
@@ -113,7 +113,7 @@ describe("evaluateGate", () => {
   it("returns passed=false when function gate times out", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/slow-gate.ts:check",
+      functionRef: "gates/test/slow-gate.ts:check",
       timeoutMs: 50,
     });
     const entity = makeEntity();
@@ -143,7 +143,7 @@ describe("evaluateGate", () => {
   it("returns passed=false when exported name is not a function", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/passing-gate.ts:nonExistent",
+      functionRef: "gates/test/passing-gate.ts:nonExistent",
     });
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
@@ -371,8 +371,8 @@ describe("evaluateGate", () => {
 
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
-    expect(result.output).toMatch(/outside the project root/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/outside the project root/));
+    expect(result.output).toMatch(/gates\/ directory/);
+    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gates\/ directory/));
   });
 
   it("clears the timeout timer when the function gate resolves", async () => {
@@ -380,7 +380,7 @@ describe("evaluateGate", () => {
     // (vitest detects leaked timers). This test verifies the timer IS cleared.
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/passing-gate.ts:check",
+      functionRef: "gates/test/passing-gate.ts:check",
       timeoutMs: 5000,
     });
     const entity = makeEntity();
@@ -399,7 +399,7 @@ describe("evaluateGate", () => {
   it("treats timeoutMs=0 as no timeout (uses default), not zero-ms timeout", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/passing-gate.ts:check",
+      functionRef: "gates/test/passing-gate.ts:check",
       timeoutMs: 0,
     });
     const entity = makeEntity();
@@ -418,7 +418,7 @@ describe("evaluateGate", () => {
   it("returns passed=false when function returns wrong shape", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/bad-return-gate.ts:check",
+      functionRef: "gates/test/bad-return-gate.ts:check",
     });
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
@@ -436,7 +436,7 @@ describe("evaluateGate", () => {
   it("records passed=false and returns when function gate throws", async () => {
     const gate = makeGate({
       type: "function",
-      functionRef: "tests/engine/fixtures/throwing-gate.ts:check",
+      functionRef: "gates/test/throwing-gate.ts:check",
     });
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
@@ -481,7 +481,7 @@ describe("evaluateGate", () => {
 
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
-    expect(result.output).toMatch(/outside the project root/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/outside the project root/));
+    expect(result.output).toMatch(/gates\/ directory/);
+    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gates\/ directory/));
   });
 });
