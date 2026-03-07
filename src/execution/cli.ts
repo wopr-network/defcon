@@ -10,6 +10,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { createHttpServer } from "../api/server.js";
 import { exportSeed } from "../config/exporter.js";
 import { loadSeed } from "../config/seed-loader.js";
+import { resolveCorsOrigin } from "../cors.js";
 import { Engine } from "../engine/engine.js";
 import { EventEmitter } from "../engine/event-emitter.js";
 import { DrizzleEntityRepository } from "../repositories/drizzle/entity.repo.js";
@@ -259,7 +260,22 @@ program
     if (startHttp) {
       const httpPort = parseInt(opts.httpPort as string, 10);
       const httpHost = opts.httpHost as string;
-      restHttpServer = createHttpServer({ engine, mcpDeps: deps, adminToken, workerToken });
+      let restCorsResult: ReturnType<typeof resolveCorsOrigin>;
+      try {
+        restCorsResult = resolveCorsOrigin({ host: httpHost, corsEnv: process.env.DEFCON_CORS_ORIGIN });
+      } catch (err: unknown) {
+        console.error((err as Error).message);
+        await stopReaper();
+        sqlite.close();
+        process.exit(1);
+      }
+      restHttpServer = createHttpServer({
+        engine,
+        mcpDeps: deps,
+        adminToken,
+        workerToken,
+        corsOrigin: restCorsResult.origin ?? undefined,
+      });
       restHttpServer.listen(httpPort, httpHost, () => {
         const addr = restHttpServer?.address();
         const boundPort = addr && typeof addr === "object" ? addr.port : httpPort;
@@ -278,18 +294,28 @@ program
       const sessionTokens = new Map<string, string | undefined>();
 
       const host = opts.host as string;
-      const isLoopback = host === "127.0.0.1" || host === "localhost";
-      let allowedOriginPattern: RegExp | null = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-      if (!isLoopback) {
-        console.warn(`WARNING: --host ${host} is not a loopback address — allowing all CORS origins`);
-        allowedOriginPattern = null;
+      let corsResult: ReturnType<typeof resolveCorsOrigin>;
+      try {
+        corsResult = resolveCorsOrigin({ host, corsEnv: process.env.DEFCON_CORS_ORIGIN });
+      } catch (err: unknown) {
+        console.error((err as Error).message);
+        await stopReaper();
+        sqlite.close();
+        process.exit(1);
       }
+      const allowedOriginPattern: RegExp | string | null = corsResult.origin
+        ? corsResult.origin // exact string match
+        : /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/; // loopback default
 
       const httpServer = http.createServer(async (req, res) => {
         // CORS: restrict to localhost origins when bound to loopback; allow all when bound to non-loopback
         const origin = req.headers.origin;
         if (origin) {
-          if (allowedOriginPattern === null || allowedOriginPattern.test(origin)) {
+          const originAllowed =
+            typeof allowedOriginPattern === "string"
+              ? origin === allowedOriginPattern
+              : allowedOriginPattern.test(origin);
+          if (originAllowed) {
             res.setHeader("Vary", "Origin");
             res.setHeader("Access-Control-Allow-Origin", origin);
             res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
