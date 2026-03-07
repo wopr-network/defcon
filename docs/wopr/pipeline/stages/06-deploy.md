@@ -9,7 +9,7 @@
 DevOps operations are handled by a `devops` discipline worker. In passive mode, a worker calls:
 
 ```bash
-flow.claim({ workerId: "wkr_abc123", role: "devops" })
+flow.claim({ worker_id: "wkr_abc123", role: "devops" })
 ```
 
 In active mode, DEFCON spawns a devops agent from the configured `wopr-release` or `wopr-incident` flow when an entity is created by an external event (GitHub release tag, PagerDuty alert).
