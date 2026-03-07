@@ -1,0 +1,1 @@
+ALTER TABLE `flow_definitions` ADD `default_model_tier` text;

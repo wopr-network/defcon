@@ -12,10 +12,10 @@ export interface IAIProviderAdapter {
   invoke(prompt: string, config: { model: string }): Promise<{ content: string }>;
 }
 
-const MODEL_TIER_MAP: Record<string, string> = {
-  reasoning: "claude-opus-4-6",
-  execution: "claude-sonnet-4-6",
-  monitoring: "claude-haiku-4-5",
+const DEFAULT_MODEL_TIER_MAP: Record<string, string> = {
+  opus: "claude-opus-4-6",
+  sonnet: "claude-sonnet-4-6",
+  haiku: "claude-haiku-4-5-20251001",
 };
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -27,6 +27,7 @@ export interface ActiveRunnerDeps {
   invocationRepo: IInvocationRepository;
   entityRepo: IEntityRepository;
   flowRepo: IFlowRepository;
+  modelTierMap?: Record<string, string>;
 }
 
 export interface ActiveRunnerRunOptions {
@@ -42,6 +43,7 @@ export class ActiveRunner {
   private invocationRepo: IInvocationRepository;
   private entityRepo: IEntityRepository;
   private flowRepo: IFlowRepository;
+  private modelTierMap: Record<string, string>;
 
   constructor(deps: ActiveRunnerDeps) {
     this.engine = deps.engine;
@@ -49,6 +51,7 @@ export class ActiveRunner {
     this.invocationRepo = deps.invocationRepo;
     this.entityRepo = deps.entityRepo;
     this.flowRepo = deps.flowRepo;
+    this.modelTierMap = deps.modelTierMap ?? DEFAULT_MODEL_TIER_MAP;
   }
 
   async run(options: ActiveRunnerRunOptions = {}): Promise<void> {
@@ -163,8 +166,9 @@ export class ActiveRunner {
     const flow = await this.flowRepo.get(entity.flowId);
     if (!flow) return DEFAULT_MODEL;
     const state = flow.states.find((s) => s.name === invocation.stage);
-    if (!state?.modelTier) return DEFAULT_MODEL;
-    return MODEL_TIER_MAP[state.modelTier] ?? DEFAULT_MODEL;
+    const tier = state?.modelTier ?? flow.defaultModelTier;
+    if (!tier) return DEFAULT_MODEL;
+    return this.modelTierMap[tier] ?? DEFAULT_MODEL;
   }
 
   parseResponse(content: string): { signal: string; artifacts: Record<string, unknown> } | null {

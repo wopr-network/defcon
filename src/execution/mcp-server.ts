@@ -177,6 +177,10 @@ const TOOL_DEFINITIONS = [
           description:
             "Discipline role required to claim work in this flow (e.g. engineering, devops). Null means any role can claim.",
         },
+        defaultModelTier: {
+          type: "string",
+          description: "Default model tier for states that don't specify one (opus, sonnet, haiku)",
+        },
         description: { type: "string", description: "Flow description" },
         entitySchema: { type: "object", description: "JSON schema for entity data" },
         maxConcurrent: { type: "number", description: "Max concurrent entities (0=unlimited)" },
@@ -201,6 +205,7 @@ const TOOL_DEFINITIONS = [
         flow_name: { type: "string", description: "Flow name to update" },
         description: { type: "string" },
         discipline: { type: "string", description: "Discipline role required to claim work in this flow" },
+        defaultModelTier: { type: "string", description: "Default model tier for states that don't specify one" },
         maxConcurrent: { type: "number" },
         maxConcurrentPerRepo: { type: "number" },
         affinityWindowMs: { type: "number", description: "Worker affinity window duration in ms (default 300000)" },

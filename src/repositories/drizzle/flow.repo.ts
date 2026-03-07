@@ -66,6 +66,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     version: r.version ?? 1,
     createdBy: r.createdBy ?? null,
     discipline: r.discipline ?? null,
+    defaultModelTier: r.defaultModelTier ?? null,
     createdAt: toDate(r.createdAt),
     updatedAt: toDate(r.updatedAt),
     states,
@@ -107,6 +108,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       version: 1,
       createdBy: input.createdBy ?? null,
       discipline: input.discipline ?? null,
+      defaultModelTier: input.defaultModelTier ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -151,6 +153,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.version !== undefined) updateValues.version = changes.version;
     if (changes.createdBy !== undefined) updateValues.createdBy = changes.createdBy;
     if (changes.discipline !== undefined) updateValues.discipline = changes.discipline;
+    if (changes.defaultModelTier !== undefined) updateValues.defaultModelTier = changes.defaultModelTier;
 
     this.db.update(flowDefinitions).set(updateValues).where(eq(flowDefinitions.id, id)).run();
 
@@ -267,6 +270,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,
       discipline: flow.discipline,
+      defaultModelTier: flow.defaultModelTier,
       states: flow.states,
       transitions: flow.transitions,
     };
@@ -321,6 +325,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       version: number;
       createdBy: string | null;
       discipline: string | null;
+      defaultModelTier: string | null;
       states: State[];
       transitions: Transition[];
     };
@@ -374,6 +379,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
           version: snap.version,
           createdBy: snap.createdBy,
           discipline: snap.discipline,
+          defaultModelTier: snap.defaultModelTier ?? null,
           updatedAt: Date.now(),
         })
         .where(eq(flowDefinitions.id, flowId))

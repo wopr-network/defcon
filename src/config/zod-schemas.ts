@@ -15,6 +15,7 @@ export const FlowDefinitionSchema = z.object({
   version: z.number().int().min(1).optional().default(1),
   createdBy: z.string().optional(),
   discipline: z.string().min(1),
+  defaultModelTier: z.string().min(1).optional(),
 });
 
 export const OnEnterSchema = z.object({
