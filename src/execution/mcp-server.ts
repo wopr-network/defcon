@@ -425,8 +425,8 @@ export async function callToolHandler(
       }
     }
 
-    // Auth gate: flow.* tools require a valid worker token when one is configured
-    if (name.startsWith("flow.")) {
+    // Auth gate: flow.* tools and query.flows require a valid worker token when one is configured
+    if (name.startsWith("flow.") || name === "query.flows") {
       const configuredToken = opts?.workerToken?.trim() || undefined; // treat "" or whitespace-only as unset
       if (configuredToken && !opts?.stdioTrusted) {
         const callerToken = opts?.callerToken;

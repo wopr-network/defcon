@@ -464,13 +464,25 @@ describe("MCP tool handlers", () => {
   });
 
   it("query.flows returns empty array when no flows exist", async () => {
-    const localList = vi.fn(async () => []);
-    deps.flows.list = localList;
-    const result = await callTool("query.flows", {});
+    const freshDeps = { ...deps, flows: { ...deps.flows, list: vi.fn(async () => []) } };
+    const { callToolHandler } = await import("../../src/execution/mcp-server.js");
+    const result = await callToolHandler(freshDeps, "query.flows", {});
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(Array.isArray(data)).toBe(true);
     expect(data).toHaveLength(0);
+  });
+
+  it("query.flows requires workerToken when configured", async () => {
+    const { callToolHandler } = await import("../../src/execution/mcp-server.js");
+    const result = await callToolHandler(
+      deps,
+      "query.flows",
+      {},
+      { workerToken: "secret-token", callerToken: "wrong-token" },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Unauthorized");
   });
 
   // Finding 1: flow.report completes the invocation before delegating to the engine
