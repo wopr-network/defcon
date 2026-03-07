@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { Engine } from "../engine/engine.js";
 import type { McpServerDeps } from "../execution/mcp-server.js";
@@ -11,26 +10,28 @@ export interface HttpServerDeps {
   adminToken?: string;
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
+const BODY_SIZE_LIMIT = 1024 * 1024; // 1MB
+
+function readBody(req: http.IncomingMessage): Promise<{ body: string; tooLarge: boolean }> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > BODY_SIZE_LIMIT) {
+        tooLarge = true;
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve({ body: Buffer.concat(chunks).toString("utf8"), tooLarge }));
+    req.on("error", (err) => {
+      if (tooLarge) resolve({ body: "", tooLarge: true });
+      else reject(err);
+    });
   });
-}
-
-function extractBearerToken(header: string | undefined): string | undefined {
-  if (!header) return undefined;
-  const lower = header.toLowerCase();
-  if (!lower.startsWith("bearer ")) return undefined;
-  return header.slice(7).trim() || undefined;
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const hashA = createHash("sha256").update(a.trim()).digest();
-  const hashB = createHash("sha256").update(b.trim()).digest();
-  return timingSafeEqual(hashA, hashB);
 }
 
 /** Unwrap MCP tool result into HTTP response */
@@ -124,7 +125,10 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
     if (!flow || !state) return { status: 400, body: { error: "Required query params: flow, state" } };
     const limitStr = req.query.get("limit");
     const args: Record<string, unknown> = { flow, state };
-    if (limitStr) args.limit = parseInt(limitStr, 10);
+    if (limitStr) {
+      const limit = parseInt(limitStr, 10);
+      if (!Number.isNaN(limit) && limit > 0) args.limit = limit;
+    }
     const result = await callToolHandler(deps.mcpDeps, "query.entities", args);
     return mcpResultToApi(result);
   });
@@ -141,22 +145,24 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
   });
 
   router.add("PUT", "/api/flows/:id", async (req) => {
-    const callerToken = req.body?._token as string | undefined;
     const existing = await deps.mcpDeps.flows.getByName(req.params.id as string);
+    // Only pick known fields from body — never spread req.body to prevent param injection
+    const definition = req.body?.definition;
+    const description = req.body?.description as string | undefined;
     if (existing) {
       const result = await callToolHandler(
         deps.mcpDeps,
         "admin.flow.update",
-        { flow_name: req.params.id, ...req.body },
-        { adminToken: deps.adminToken, callerToken },
+        { flow_name: req.params.id, definition, description },
+        { adminToken: deps.adminToken },
       );
       return mcpResultToApi(result);
     } else {
       const result = await callToolHandler(
         deps.mcpDeps,
         "admin.flow.create",
-        { name: req.params.id, ...req.body },
-        { adminToken: deps.adminToken, callerToken },
+        { name: req.params.id, definition, description },
+        { adminToken: deps.adminToken },
       );
       return mcpResultToApi(result);
     }
@@ -169,13 +175,9 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
   // --- HTTP server ---
   const server = http.createServer(async (req, res) => {
     // CORS
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {
       res.writeHead(204).end();
       return;
@@ -190,15 +192,15 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
       return;
     }
 
-    const callerToken = extractBearerToken(req.headers.authorization);
-    // Suppress unused variable warning
-    void callerToken;
-    void constantTimeEqual;
-
     let body: Record<string, unknown> | null = null;
     if (req.method === "POST" || req.method === "PUT") {
       try {
-        const raw = await readBody(req);
+        const { body: raw, tooLarge } = await readBody(req);
+        if (tooLarge) {
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Request body too large" }));
+          return;
+        }
         body = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
       } catch {
         res.writeHead(400, { "Content-Type": "application/json" });

@@ -28,10 +28,21 @@ export class Router {
 
   add(method: string, path: string, handler: Handler): void {
     const paramNames: string[] = [];
-    const patternStr = path.replace(/:([^/]+)/g, (_match, name) => {
-      paramNames.push(name as string);
-      return "([^/]+)";
-    });
+    // Split on param segments, escape literal segments, then reassemble
+    const patternStr = path
+      .split(/(:([^/]+))/g)
+      .map((segment, i) => {
+        // Every 3rd token (i % 3 === 1) is the full ":name" match — replace with capture group
+        if (i % 3 === 1) {
+          paramNames.push(segment.slice(1));
+          return "([^/]+)";
+        }
+        // Every 3rd+1 token (i % 3 === 2) is the captured name — skip (already handled above)
+        if (i % 3 === 2) return "";
+        // Literal segment — escape regex metacharacters
+        return segment.replace(/[.+*?^${}()|[\]\\]/g, "\\$&");
+      })
+      .join("");
     this.routes.push({
       method,
       pattern: new RegExp(`^${patternStr}$`),

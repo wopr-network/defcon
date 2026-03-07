@@ -117,7 +117,7 @@ program
   .command("serve")
   .description("Start MCP server")
   .option("--transport <type>", "Transport: stdio or sse", "stdio")
-  .option("--port <number>", "Port for SSE transport", "3000")
+  .option("--port <number>", "Port for SSE transport", "3001")
   .option(
     "--host <address>",
     "Host address to bind to (default: 127.0.0.1, use 0.0.0.0 for network access)",
@@ -178,6 +178,12 @@ program
       process.exit(1);
     }
     const stopReaper = engine.startReaper(reaperInterval, claimTtl);
+
+    if (opts.httpOnly && opts.mcpOnly) {
+      console.error("Cannot use --http-only and --mcp-only together");
+      sqlite.close();
+      process.exit(1);
+    }
 
     const adminToken = process.env.DEFCON_ADMIN_TOKEN || undefined;
 
