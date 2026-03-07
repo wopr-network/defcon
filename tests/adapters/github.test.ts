@@ -238,6 +238,35 @@ describe("path validation", () => {
       expect(typeof result).toBe("string");
     });
 
+    it("accepts worktree path with dot-prefixed directory name inside WORKTREE_BASE", async () => {
+      const tmpWorktreeBase = mkdtempSync(join(tmpdir(), "wt-base-"));
+      const dotPrefixedDir = join(tmpWorktreeBase, "..hidden-dir");
+      mkdirSync(dotPrefixedDir, { recursive: true });
+
+      const tmpReposBase = mkdtempSync(join(tmpdir(), "repos-base-"));
+      mkdirSync(join(tmpReposBase, "org-repo"), { recursive: true });
+
+      const origWorktreeBase = process.env.WORKTREE_BASE;
+      const origReposBase = process.env.REPOS_BASE;
+      process.env.WORKTREE_BASE = tmpWorktreeBase;
+      process.env.REPOS_BASE = tmpReposBase;
+      try {
+        mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+        const result = await adapter.createWorktree(
+          join(tmpReposBase, "org-repo"),
+          "feat",
+          dotPrefixedDir,
+        );
+        expect(mockExec).toHaveBeenCalledTimes(1);
+        expect(result).toBe(dotPrefixedDir);
+      } finally {
+        process.env.WORKTREE_BASE = origWorktreeBase;
+        process.env.REPOS_BASE = origReposBase;
+        rmSync(tmpWorktreeBase, { recursive: true, force: true });
+        rmSync(tmpReposBase, { recursive: true, force: true });
+      }
+    });
+
     it("rejects a localRepoPath symlink inside REPOS_BASE that points outside", async () => {
       // Create a temporary directory to act as REPOS_BASE
       const tmpReposBase = mkdtempSync(join(tmpdir(), "repos-base-"));

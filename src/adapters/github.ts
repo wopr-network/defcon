@@ -1,6 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type { ICodeHostAdapter } from "./interfaces.js";
 
@@ -25,7 +25,7 @@ function getReposBase(): string {
 
 function isOutside(resolved: string, base: string): boolean {
   const rel = relative(base, resolved);
-  return rel.startsWith("..") || isAbsolute(rel);
+  return rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel);
 }
 
 function validatePath(value: string, base: string, label: string, mustExist = false): string {
