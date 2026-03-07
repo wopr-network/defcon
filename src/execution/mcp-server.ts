@@ -423,8 +423,8 @@ function errorResult(message: string) {
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
-  const hashA = createHash("sha256").update(a).digest();
-  const hashB = createHash("sha256").update(b).digest();
+  const hashA = createHash("sha256").update(a.trim()).digest();
+  const hashB = createHash("sha256").update(b.trim()).digest();
   return timingSafeEqual(hashA, hashB);
 }
 

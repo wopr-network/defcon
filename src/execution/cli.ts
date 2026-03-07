@@ -560,6 +560,7 @@ export function verifySessionToken(storedTokenHash: string | undefined, incoming
   const hashIncoming = createHash("sha256").update(incomingToken).digest("hex");
   const storedBuf = Buffer.from(storedTokenHash, "hex");
   const incomingBuf = Buffer.from(hashIncoming, "hex");
+  if (storedBuf.length !== incomingBuf.length) return false;
   return timingSafeEqual(storedBuf, incomingBuf);
 }
 
