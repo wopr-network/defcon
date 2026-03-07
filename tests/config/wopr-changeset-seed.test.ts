@@ -14,7 +14,7 @@ function setupDb() {
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: "./drizzle" });
+  migrate(db, { migrationsFolder: resolve(__dirname, "../../drizzle") });
   const flowRepo = new DrizzleFlowRepository(db);
   const gateRepo = new DrizzleGateRepository(db);
   return { db, sqlite, flowRepo, gateRepo };

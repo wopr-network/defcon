@@ -6,13 +6,12 @@ set -euo pipefail
 LINEAR_ID="${1:?Usage: spec-posted.sh <linear-issue-id>}"
 
 # Query Linear API for comments on the issue containing "Implementation Spec"
-COMMENTS=$(gh api graphql -f query='
-  query($id: String!) {
-    issue(id: $id) {
-      comments { nodes { body } }
-    }
-  }
-' -f id="$LINEAR_ID" --jq '.data.issue.comments.nodes[].body' 2>&1) || {
+LINEAR_API_KEY="${LINEAR_API_KEY:?LINEAR_API_KEY env var is required}"
+COMMENTS=$(curl -s -X POST "https://api.linear.app/graphql" \
+  -H "Authorization: ${LINEAR_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"query { issue(id: \\\"${LINEAR_ID}\\\") { comments { nodes { body } } } }\"}" \
+  | grep -o '"body":"[^"]*"' | sed 's/"body":"//;s/"$//' 2>&1) || {
   echo "Failed to query Linear API: $COMMENTS"
   exit 1
 }
