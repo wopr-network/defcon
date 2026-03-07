@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { createHash, timingSafeEqual } from "node:crypto";
 import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { Command } from "commander";
@@ -473,8 +474,8 @@ program
   .description("Provision a git worktree and branch for an issue")
   .argument("<repo>", "GitHub repo (e.g. wopr-network/defcon)")
   .argument("<issue-key>", "Issue key (e.g. WOP-392)")
-  .option("--base-path <path>", "Worktree base directory", "/home/tsavo/worktrees")
-  .option("--clone-root <path>", "Directory where repos are cloned", "/home/tsavo")
+  .option("--base-path <path>", "Worktree base directory", join(homedir(), "worktrees"))
+  .option("--clone-root <path>", "Directory where repos are cloned", homedir())
   .action((repo: string, issueKey: string, opts: { basePath: string; cloneRoot: string }) => {
     try {
       const result = provisionWorktree({

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface ProvisionWorktreeResult {
@@ -17,8 +18,15 @@ export function parseIssueNumber(issueKey: string): string {
 }
 
 export function repoName(repo: string): string {
-  const parts = repo.split("/");
-  return parts[parts.length - 1];
+  const parts = repo.replace(/\/$/, "").split("/");
+  return parts[parts.length - 1] || repo;
+}
+
+export function validateRepoName(name: string): string {
+  if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+    throw new Error(`Invalid repo name: ${name}`);
+  }
+  return name;
 }
 
 export function buildBranch(issueKey: string): string {
@@ -33,11 +41,16 @@ export function buildWorktreePath(repo: string, issueKey: string, basePath: stri
 }
 
 function run(cmd: string, args: string[], cwd?: string): string {
-  return execFileSync(cmd, args, {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+  try {
+    return execFileSync(cmd, args, {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch (err: unknown) {
+    const e = err as { message?: string; stderr?: string };
+    throw new Error(`${cmd} ${args.join(" ")} failed: ${e.stderr ?? e.message ?? String(err)}`);
+  }
 }
 
 export function provisionWorktree(opts: {
@@ -46,9 +59,9 @@ export function provisionWorktree(opts: {
   basePath?: string;
   cloneRoot?: string;
 }): ProvisionWorktreeResult {
-  const basePath = opts.basePath ?? "/home/tsavo/worktrees";
-  const cloneRoot = opts.cloneRoot ?? "/home/tsavo";
-  const name = repoName(opts.repo);
+  const basePath = opts.basePath ?? join(homedir(), "worktrees");
+  const cloneRoot = opts.cloneRoot ?? homedir();
+  const name = validateRepoName(repoName(opts.repo));
   const clonePath = join(cloneRoot, name);
   const worktreePath = buildWorktreePath(opts.repo, opts.issueKey, basePath);
   const branch = buildBranch(opts.issueKey);
@@ -57,9 +70,15 @@ export function provisionWorktree(opts: {
   if (existsSync(worktreePath)) {
     try {
       run("git", ["rev-parse", "--git-dir"], worktreePath);
-      // It's a valid git worktree — return success
+      const currentBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], worktreePath);
+      if (currentBranch !== branch) {
+        throw new Error(`Worktree at ${worktreePath} is on branch ${currentBranch}, expected ${branch}`);
+      }
       return { worktreePath, branch, repo: opts.repo };
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("Worktree at")) {
+        throw err;
+      }
       throw new Error(`Path ${worktreePath} exists but is not a git worktree`);
     }
   }
@@ -77,13 +96,16 @@ export function provisionWorktree(opts: {
 
   // Create worktree
   process.stderr.write(`Creating worktree at ${worktreePath}...\n`);
-  run("git", ["worktree", "add", worktreePath, "-B", branch, "origin/main"], clonePath);
+  const defaultBranchRef = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], clonePath);
+  const defaultBranch = defaultBranchRef.replace("origin/", "");
+  run("git", ["worktree", "add", worktreePath, "-B", branch, `origin/${defaultBranch}`], clonePath);
 
   // Install dependencies
   const hasPnpmLock = existsSync(join(worktreePath, "pnpm-lock.yaml"));
-  const installCmd = hasPnpmLock ? "pnpm" : "npm";
+  const hasYarnLock = existsSync(join(worktreePath, "yarn.lock"));
+  const installCmd = hasPnpmLock ? "pnpm" : hasYarnLock ? "yarn" : "npm";
   process.stderr.write(`Running ${installCmd} install in ${worktreePath}...\n`);
-  run(installCmd, ["install"], worktreePath);
+  execFileSync(installCmd, ["install"], { cwd: worktreePath, stdio: "inherit" });
 
   return { worktreePath, branch, repo: opts.repo };
 }

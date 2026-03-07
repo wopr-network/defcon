@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBranch, buildWorktreePath, parseIssueNumber, repoName } from "./provision-worktree.js";
+import { buildBranch, buildWorktreePath, parseIssueNumber, repoName, validateRepoName } from "./provision-worktree.js";
 
 describe("provision-worktree helpers", () => {
   describe("parseIssueNumber", () => {
@@ -21,11 +21,28 @@ describe("provision-worktree helpers", () => {
     it("handles bare repo name", () => {
       expect(repoName("defcon")).toBe("defcon");
     });
+    it("strips trailing slash", () => {
+      expect(repoName("wopr-network/defcon/")).toBe("defcon");
+    });
   });
 
   describe("buildBranch", () => {
     it("builds correct branch name", () => {
       expect(buildBranch("WOP-392")).toBe("agent/coder-392/wop-392");
+    });
+  });
+
+  describe("validateRepoName", () => {
+    it("accepts valid repo names", () => {
+      expect(validateRepoName("defcon")).toBe("defcon");
+      expect(validateRepoName("wopr-platform")).toBe("wopr-platform");
+      expect(validateRepoName("repo.name")).toBe("repo.name");
+    });
+    it("rejects path traversal", () => {
+      expect(() => validateRepoName("../etc")).toThrow("Invalid repo name");
+    });
+    it("rejects slashes", () => {
+      expect(() => validateRepoName("org/repo")).toThrow("Invalid repo name");
     });
   });
 
