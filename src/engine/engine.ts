@@ -374,7 +374,7 @@ export class Engine {
           return [state.name, entities.length] as [string, number];
         }),
       );
-      statusData[flow.name] = Object.fromEntries(stateEntries);
+      statusData[flow.id] = Object.fromEntries(stateEntries);
 
       const [active, pending] = await Promise.all([
         this.invocationRepo.countActiveByFlow(flow.id),

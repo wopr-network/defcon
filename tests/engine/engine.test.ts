@@ -599,7 +599,7 @@ describe("Engine", () => {
       const status = await engine.getStatus();
 
       expect(status.flows).toEqual({
-        "test-flow": { open: 2, coding: 1, done: 0 },
+        "flow-1": { open: 2, coding: 1, done: 0 },
       });
       expect(status.activeInvocations).toBe(1);
       expect(status.pendingClaims).toBe(1);
@@ -618,8 +618,8 @@ describe("Engine", () => {
     it("isolates entity counts per flow and aggregates invocation totals across flows", async () => {
       const mocks = makeMockRepos();
 
-      const flowA = makeFlow({ id: "flow-a", name: "flow-a" });
-      const flowB = makeFlow({ id: "flow-b", name: "flow-b" });
+      const flowA = makeFlow({ id: "flow-a", name: "name-a" });
+      const flowB = makeFlow({ id: "flow-b", name: "name-b" });
       (mocks.flowRepo.listAll as ReturnType<typeof vi.fn>).mockResolvedValue([flowA, flowB]);
 
       // flow-a: 1 entity in "open", 0 elsewhere; flow-b: 2 in "coding", 0 elsewhere
