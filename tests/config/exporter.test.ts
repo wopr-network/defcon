@@ -39,7 +39,7 @@ const validSeed = {
     { name: "open", flowName: "pr-review" },
     { name: "reviewing", flowName: "pr-review" },
   ],
-  gates: [{ name: "lint-pass", type: "command" as const, command: "pnpm lint" }],
+  gates: [{ name: "lint-pass", type: "command" as const, command: "gates/blocking-graph.ts" }],
   transitions: [
     {
       flowName: "pr-review",

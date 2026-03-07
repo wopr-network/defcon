@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import type { Entity, Gate, IGateRepository } from "../repositories/interfaces.js";
+import { validateGateCommand } from "./gate-command-validator.js";
 
 export interface GateEvalResult {
   passed: boolean;
@@ -19,7 +20,16 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
     if (!gate.command) {
       return { passed: false, output: "Gate command is not configured" };
     }
-    const result = await runCommand(gate.command, gate.timeoutMs);
+    // Defense-in-depth: validate command path even though schema should have caught it
+    const validation = validateGateCommand(gate.command);
+    if (!validation.valid) {
+      const msg = `Gate command not allowed: ${validation.error}`;
+      await gateRepo.record(entity.id, gate.id, false, msg);
+      return { passed: false, output: msg };
+    }
+    const [, ...args] = gate.command.split(/\s+/);
+    const resolvedPath = validation.resolvedPath ?? gate.command.split(/\s+/)[0];
+    const result = await runCommand(resolvedPath, args, gate.timeoutMs);
     passed = result.exitCode === 0;
     output = result.output;
   } else if (gate.type === "function") {
@@ -68,9 +78,7 @@ export async function evaluateGate(gate: Gate, entity: Entity, gateRepo: IGateRe
   return { passed, output };
 }
 
-function runCommand(command: string, timeoutMs: number): Promise<{ exitCode: number; output: string }> {
-  // Split into file + args to avoid shell injection (no shell: true)
-  const [file, ...args] = command.split(/\s+/);
+function runCommand(file: string, args: string[], timeoutMs: number): Promise<{ exitCode: number; output: string }> {
   return new Promise((resolve) => {
     execFile(file, args, { timeout: timeoutMs }, (error, stdout, stderr) => {
       resolve({

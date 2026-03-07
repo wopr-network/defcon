@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { validateGateCommand } from "../engine/gate-command-validator.js";
 import { validateTemplate } from "../engine/handlebars.js";
 
 // ─── Leaf Schemas ───
@@ -37,7 +38,15 @@ const BaseGateSchema = z.object({
 
 export const CommandGateSchema = BaseGateSchema.extend({
   type: z.literal("command"),
-  command: z.string().min(1),
+  command: z
+    .string()
+    .min(1)
+    .superRefine((cmd, ctx) => {
+      const result = validateGateCommand(cmd);
+      if (!result.valid) {
+        ctx.addIssue({ code: "custom", message: result.error ?? "Gate command not allowed" });
+      }
+    }),
 });
 
 export const FunctionGateSchema = BaseGateSchema.extend({

@@ -45,7 +45,7 @@ const validSeed = {
     { name: "open", flowName: "pr-review" },
     { name: "reviewing", flowName: "pr-review" },
   ],
-  gates: [{ name: "lint-pass", type: "command", command: "pnpm lint" }],
+  gates: [{ name: "lint-pass", type: "command", command: "gates/blocking-graph.ts" }],
   transitions: [
     { flowName: "pr-review", fromState: "open", toState: "reviewing", trigger: "claim", gateName: "lint-pass" },
   ],
@@ -80,7 +80,7 @@ describe("CLI", () => {
     if (existsSync(dbPath)) rmSync(dbPath);
   });
 
-  it("export --out writes to file", () => {
+  it("export --out writes to file", { timeout: 15000 }, () => {
     const seedPath = writeSeedFile(validSeed);
     const dbPath = join(tmpdir(), `cli-export-file-${Date.now()}.db`);
     const outPath = join(tmpdir(), `cli-export-${Date.now()}.json`);

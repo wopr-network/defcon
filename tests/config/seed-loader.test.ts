@@ -37,7 +37,7 @@ const validSeed = {
     { name: "open", flowName: "pr-review", mode: "passive", promptTemplate: "Review this PR" },
     { name: "reviewing", flowName: "pr-review" },
   ],
-  gates: [{ name: "lint-pass", type: "command", command: "pnpm lint" }],
+  gates: [{ name: "lint-pass", type: "command", command: "gates/blocking-graph.ts" }],
   transitions: [
     {
       flowName: "pr-review",

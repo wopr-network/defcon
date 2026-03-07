@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { validateGateCommand } from "../engine/gate-command-validator.js";
 import { validateTemplate } from "../engine/handlebars.js";
 
 const safeTemplate = z.string().refine(validateTemplate, {
@@ -82,7 +83,15 @@ export const AdminGateCreateSchema = z.discriminatedUnion("type", [
   z.object({
     name: z.string().min(1),
     type: z.literal("command"),
-    command: z.string().min(1),
+    command: z
+      .string()
+      .min(1)
+      .superRefine((cmd, ctx) => {
+        const result = validateGateCommand(cmd);
+        if (!result.valid) {
+          ctx.addIssue({ code: "custom", message: result.error ?? "Gate command not allowed" });
+        }
+      }),
     timeoutMs: z.number().int().min(0).optional(),
   }),
   z.object({
