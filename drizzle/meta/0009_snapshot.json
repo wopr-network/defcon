@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b5ebb4f7-0d0f-49cf-8ef6-a72529fd38d7",
-  "prevId": "a758b00f-5fdf-44ab-bc75-d2b56a13a240",
+  "id": "0009_brief_midnight",
+  "prevId": "305e8a4e-e4af-456c-8ad7-63de0a2c1a26",
   "tables": {
     "entities": {
       "name": "entities",
@@ -394,6 +394,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "default_model_tier": {
+          "name": "default_model_tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -404,6 +411,13 @@
         "updated_at": {
           "name": "updated_at",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timeout_prompt": {
+          "name": "timeout_prompt",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

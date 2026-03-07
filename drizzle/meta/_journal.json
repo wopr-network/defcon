@@ -54,8 +54,8 @@
     {
       "idx": 7,
       "version": "6",
-      "when": 1772898369798,
-      "tag": "0007_perpetual_gauntlet",
+      "when": 1741305600000,
+      "tag": "0007_fancy_luke_cage",
       "breakpoints": true
     },
     {
@@ -63,6 +63,13 @@
       "version": "6",
       "when": 1772909877406,
       "tag": "0008_thick_dark_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1772906724993,
+      "tag": "0009_brief_midnight",
       "breakpoints": true
     }
   ]
