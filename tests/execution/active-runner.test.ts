@@ -571,6 +571,40 @@ describe("processInvocation — complete() throws", () => {
   });
 });
 
+describe("processInvocation — releaseClaim() throws", () => {
+  it("swallows releaseClaim error and does not rethrow when complete() and releaseClaim() both fail", async () => {
+    const invocation = makeInvocation();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const processSignalMock = vi.fn();
+    const releaseClaimMock = vi.fn().mockRejectedValue(new Error("release failed"));
+    const deps = makeDeps({
+      invocationRepo: {
+        findUnclaimedActive: vi.fn().mockResolvedValue([invocation]),
+        claim: vi.fn().mockResolvedValue(invocation),
+        complete: vi.fn().mockRejectedValue(new Error("DB write failed")),
+        fail: vi.fn(),
+        create: vi.fn(),
+        releaseClaim: releaseClaimMock,
+      } as any,
+      engine: {
+        processSignal: processSignalMock,
+      } as any,
+    });
+
+    const runner = new ActiveRunner(deps);
+    // Should not throw even though both complete() and releaseClaim() throw
+    await expect(runner.run({ once: true })).resolves.toBeUndefined();
+
+    expect(processSignalMock).not.toHaveBeenCalled();
+    expect(releaseClaimMock).toHaveBeenCalledWith(invocation.id);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("releaseClaim failed:"),
+      expect.any(String),
+    );
+    errorSpy.mockRestore();
+  });
+});
+
 describe("run() abort signal", () => {
   it("exits immediately when signal is already aborted", async () => {
     const controller = new AbortController();

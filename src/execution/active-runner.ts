@@ -113,7 +113,14 @@ export class ActiveRunner {
       await this.invocationRepo.complete(invocation.id, parsed.signal, parsed.artifacts);
     } catch (err) {
       this.logger.error(`[active-runner] complete() failed for invocation ${invocation.id} before processSignal:`, err);
-      await this.invocationRepo.releaseClaim(invocation.id);
+      try {
+        await this.invocationRepo.releaseClaim(invocation.id);
+      } catch (releaseErr) {
+        this.logger.error(
+          "[active-runner] releaseClaim failed:",
+          releaseErr instanceof Error ? releaseErr.message : String(releaseErr),
+        );
+      }
       return;
     }
 
