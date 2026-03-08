@@ -1,30 +1,12 @@
 export class DefconError extends Error {
   constructor(msg: string) {
     super(msg);
-    this.name = "DefconError";
+    this.name = new.target.name;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
-export class NotFoundError extends DefconError {
-  constructor(msg: string) {
-    super(msg);
-    this.name = "NotFoundError";
-  }
-}
-export class ConflictError extends DefconError {
-  constructor(msg: string) {
-    super(msg);
-    this.name = "ConflictError";
-  }
-}
-export class ValidationError extends DefconError {
-  constructor(msg: string) {
-    super(msg);
-    this.name = "ValidationError";
-  }
-}
-export class GateError extends DefconError {
-  constructor(msg: string) {
-    super(msg);
-    this.name = "GateError";
-  }
-}
+export class NotFoundError extends DefconError {}
+export class ConflictError extends DefconError {}
+export class ValidationError extends DefconError {}
+export class GateError extends DefconError {}
+export class InternalError extends DefconError {}

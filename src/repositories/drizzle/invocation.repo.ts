@@ -1,6 +1,6 @@
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { ConflictError, NotFoundError } from "../../errors.js";
+import { ConflictError, InternalError, NotFoundError } from "../../errors.js";
 import type { Artifacts, IInvocationRepository, Invocation, Mode } from "../interfaces.js";
 import type * as schema from "./schema.js";
 import { entities, invocations } from "./schema.js";
@@ -53,7 +53,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
       })
       .run();
     const created = await this.get(id);
-    if (!created) throw new NotFoundError(`Invocation ${id} not found after insert`);
+    if (!created) throw new InternalError(`Invocation ${id} not found after insert`);
     return created;
   }
 
@@ -97,7 +97,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     }
 
     const row = this.db.select().from(invocations).where(eq(invocations.id, id)).all();
-    if (row.length === 0) throw new NotFoundError(`Invocation ${id} not found after update`);
+    if (row.length === 0) throw new InternalError(`Invocation ${id} not found after update`);
     return toInvocation(row[0]);
   }
 
@@ -117,7 +117,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     }
 
     const row = this.db.select().from(invocations).where(eq(invocations.id, id)).all();
-    if (row.length === 0) throw new NotFoundError(`Invocation ${id} not found after update`);
+    if (row.length === 0) throw new InternalError(`Invocation ${id} not found after update`);
     return toInvocation(row[0]);
   }
 

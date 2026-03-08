@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { asc, eq, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { NotFoundError } from "../../errors.js";
+import { InternalError } from "../../errors.js";
 import type { CreateGateInput, Gate, GateResult, IGateRepository } from "../interfaces.js";
 import type * as schema from "./schema.js";
 import { gateDefinitions, gateResults } from "./schema.js";
@@ -51,7 +51,7 @@ export class DrizzleGateRepository implements IGateRepository {
     };
     this.db.insert(gateDefinitions).values(values).run();
     const row = this.db.select().from(gateDefinitions).where(eq(gateDefinitions.id, id)).get();
-    if (!row) throw new NotFoundError(`Gate ${id} not found after insert`);
+    if (!row) throw new InternalError(`Gate ${id} not found after insert`);
     return toGate(row);
   }
 
@@ -85,7 +85,7 @@ export class DrizzleGateRepository implements IGateRepository {
       })
       .run();
     const row = this.db.select().from(gateResults).where(eq(gateResults.id, id)).get();
-    if (!row) throw new NotFoundError(`GateResult ${id} not found after insert`);
+    if (!row) throw new InternalError(`GateResult ${id} not found after insert`);
     return toGateResult(row);
   }
 
@@ -97,7 +97,7 @@ export class DrizzleGateRepository implements IGateRepository {
   ): Promise<Gate> {
     this.db.update(gateDefinitions).set(changes).where(eq(gateDefinitions.id, id)).run();
     const row = this.db.select().from(gateDefinitions).where(eq(gateDefinitions.id, id)).get();
-    if (!row) throw new NotFoundError(`Gate ${id} not found after update`);
+    if (!row) throw new InternalError(`Gate ${id} not found after update`);
     return toGate(row);
   }
 

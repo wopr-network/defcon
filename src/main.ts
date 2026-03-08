@@ -35,3 +35,4 @@ export function bootstrap(dbPath = DB_PATH): {
 
 export * from "./api/wire-types.js";
 export * from "./engine/index.js";
+export { ConflictError, DefconError, GateError, InternalError, NotFoundError, ValidationError } from "./errors.js";
