@@ -94,6 +94,8 @@ export interface State {
   promptTemplate: string | null;
   constraints: Record<string, unknown> | null;
   onEnter: OnEnterConfig | null;
+  /** Override check_back delay for workers claiming this state. Falls back to Flow.claimRetryAfterMs. */
+  retryAfterMs: number | null;
 }
 
 /** A transition rule between two states */
@@ -134,6 +136,8 @@ export interface Flow {
   maxConcurrent: number;
   maxConcurrentPerRepo: number;
   affinityWindowMs: number;
+  /** Flow-level default check_back delay when no work is available. Falls back to RETRY_LONG_MS (300s) if null. */
+  claimRetryAfterMs: number | null;
   gateTimeoutMs: number | null;
   version: number;
   createdBy: string | null;
@@ -167,6 +171,7 @@ export interface CreateFlowInput {
   maxConcurrent?: number;
   maxConcurrentPerRepo?: number;
   affinityWindowMs?: number;
+  claimRetryAfterMs?: number;
   gateTimeoutMs?: number;
   createdBy?: string;
   discipline?: string;
@@ -183,6 +188,7 @@ export interface CreateStateInput {
   promptTemplate?: string;
   constraints?: Record<string, unknown>;
   onEnter?: OnEnterConfig;
+  retryAfterMs?: number;
 }
 
 /** Input for adding a transition rule */

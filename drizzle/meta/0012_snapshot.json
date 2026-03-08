@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0010_amusing_bastion",
-  "prevId": "0009_brief_midnight",
+  "id": "0e92bb1e-afc5-4558-9835-15b28868866c",
+  "prevId": "a2384a7a-1eaf-4a3b-9c15-63d80b01de50",
   "tables": {
     "entities": {
       "name": "entities",
@@ -372,6 +372,20 @@
           "autoincrement": false,
           "default": 300000
         },
+        "claim_retry_after_ms": {
+          "name": "claim_retry_after_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "gate_timeout_ms": {
+          "name": "gate_timeout_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "version": {
           "name": "version",
           "type": "integer",
@@ -401,6 +415,21 @@
           "notNull": false,
           "autoincrement": false
         },
+        "timeout_prompt": {
+          "name": "timeout_prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paused": {
+          "name": "paused",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -410,20 +439,6 @@
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "timeout_prompt": {
-          "name": "timeout_prompt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "gate_timeout_ms": {
-          "name": "gate_timeout_ms",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -576,8 +591,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": 30000
+          "autoincrement": false
         },
         "failure_prompt": {
           "name": "failure_prompt",
@@ -902,6 +916,13 @@
         "on_enter": {
           "name": "on_enter",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "retry_after_ms": {
+          "name": "retry_after_ms",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

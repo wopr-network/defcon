@@ -4,7 +4,29 @@ import { errorResult, jsonResult, validateInput } from "../mcp-helpers.js";
 import { FlowClaimSchema, FlowFailSchema, FlowGetPromptSchema, FlowReportSchema } from "../tool-schemas.js";
 
 const RETRY_SHORT_MS = 30_000; // entities exist but all claimed
-const RETRY_LONG_MS = 300_000; // backlog empty
+const RETRY_LONG_MS = 300_000; // backlog empty — fallback when no per-flow/state config
+
+/**
+ * Resolve the check_back delay for a "no work" response.
+ * Priority: state.retryAfterMs > flow.claimRetryAfterMs > RETRY_LONG_MS
+ */
+function resolveRetryMs(flows: import("../../repositories/interfaces.js").Flow[], forEmpty: boolean): number {
+  if (!forEmpty) return RETRY_SHORT_MS;
+  // Find the minimum configured retryAfterMs across all candidate flows/states.
+  let best: number | null = null;
+  for (const flow of flows) {
+    const flowDefault = flow.claimRetryAfterMs ?? null;
+    // Check each state for a state-level override
+    for (const state of flow.states) {
+      if (state.promptTemplate === null) continue; // not a claimable state
+      const ms = state.retryAfterMs ?? flowDefault;
+      if (ms !== null && (best === null || ms < best)) best = ms;
+    }
+    // If no states had overrides but the flow has a default
+    if (flowDefault !== null && (best === null || flowDefault < best)) best = flowDefault;
+  }
+  return best ?? RETRY_LONG_MS;
+}
 
 function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jsonResult> {
   return jsonResult({
@@ -26,14 +48,15 @@ export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, 
     const flow = await deps.flows.getByName(flowName);
     if (!flow) return errorResult(`Flow not found: ${flowName}`);
     // Discipline must match — null discipline flows are claimable by any role
-    if (flow.discipline !== null && flow.discipline !== role) return noWorkResult(RETRY_LONG_MS, role);
+    if (flow.discipline !== null && flow.discipline !== role)
+      return noWorkResult(flow.claimRetryAfterMs ?? RETRY_LONG_MS, role);
     candidateFlows = [flow];
   } else {
     const allFlows = await deps.flows.list();
     candidateFlows = allFlows.filter((f) => f.discipline === null || f.discipline === role);
   }
 
-  if (candidateFlows.length === 0) return noWorkResult(RETRY_LONG_MS, role);
+  if (candidateFlows.length === 0) return noWorkResult(RETRY_LONG_MS, role); // no flows configured for this role
 
   // 2. Gather all unclaimed invocations across matching flows
   type CandidateInvocation = import("../../repositories/interfaces.js").Invocation;
@@ -54,7 +77,7 @@ export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, 
         break;
       }
     }
-    return noWorkResult(hasEntities ? RETRY_SHORT_MS : RETRY_LONG_MS, role);
+    return noWorkResult(resolveRetryMs(candidateFlows, !hasEntities), role);
   }
 
   // 3. Load entities for priority sorting

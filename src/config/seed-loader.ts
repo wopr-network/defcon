@@ -109,6 +109,7 @@ async function parseSeedAndLoad(
         initialState: f.initialState,
         maxConcurrent: f.maxConcurrent,
         maxConcurrentPerRepo: f.maxConcurrentPerRepo,
+        claimRetryAfterMs: f.claimRetryAfterMs,
         gateTimeoutMs: f.gateTimeoutMs,
         createdBy: f.createdBy,
         discipline: f.discipline,
@@ -125,6 +126,7 @@ async function parseSeedAndLoad(
           promptTemplate: s.promptTemplate,
           constraints: s.constraints,
           onEnter: s.onEnter,
+          retryAfterMs: s.retryAfterMs,
         });
       }
 

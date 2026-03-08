@@ -12,6 +12,7 @@ export const FlowDefinitionSchema = z.object({
   maxConcurrent: z.number().int().min(0).optional().default(0),
   maxConcurrentPerRepo: z.number().int().min(0).optional().default(0),
   affinityWindowMs: z.number().int().min(0).optional().default(300000),
+  claimRetryAfterMs: z.number().int().min(0).optional(),
   gateTimeoutMs: z.number().int().min(1).optional(),
   version: z.number().int().min(1).optional().default(1),
   createdBy: z.string().optional(),
@@ -51,6 +52,7 @@ export const StateDefinitionSchema = z.object({
     .optional(),
   constraints: z.record(z.string(), z.unknown()).optional(),
   onEnter: OnEnterSchema.optional(),
+  retryAfterMs: z.number().int().min(0).optional(),
 });
 
 // Gate: discriminated union on `type`

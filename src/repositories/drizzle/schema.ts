@@ -11,6 +11,7 @@ export const flowDefinitions = sqliteTable("flow_definitions", {
   maxConcurrent: integer("max_concurrent").default(0),
   maxConcurrentPerRepo: integer("max_concurrent_per_repo").default(0),
   affinityWindowMs: integer("affinity_window_ms").default(300000),
+  claimRetryAfterMs: integer("claim_retry_after_ms"),
   gateTimeoutMs: integer("gate_timeout_ms"),
   version: integer("version").default(1),
   createdBy: text("created_by"),
@@ -36,6 +37,7 @@ export const stateDefinitions = sqliteTable(
     promptTemplate: text("prompt_template"),
     constraints: text("constraints", { mode: "json" }),
     onEnter: text("on_enter", { mode: "json" }),
+    retryAfterMs: integer("retry_after_ms"),
   },
   (table) => ({
     flowNameUnique: uniqueIndex("state_definitions_flow_name_unique").on(table.flowId, table.name),

@@ -35,6 +35,7 @@ function rowToState(r: typeof stateDefinitions.$inferSelect): State {
     promptTemplate: r.promptTemplate ?? null,
     constraints: r.constraints as Record<string, unknown> | null,
     onEnter: (r.onEnter as OnEnterConfig | null) ?? null,
+    retryAfterMs: r.retryAfterMs ?? null,
   };
 }
 
@@ -64,6 +65,7 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     maxConcurrent: r.maxConcurrent ?? 0,
     maxConcurrentPerRepo: r.maxConcurrentPerRepo ?? 0,
     affinityWindowMs: r.affinityWindowMs ?? 300000,
+    claimRetryAfterMs: r.claimRetryAfterMs ?? null,
     gateTimeoutMs: r.gateTimeoutMs ?? null,
     version: r.version ?? 1,
     createdBy: r.createdBy ?? null,
@@ -109,6 +111,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       maxConcurrent: input.maxConcurrent ?? 0,
       maxConcurrentPerRepo: input.maxConcurrentPerRepo ?? 0,
       affinityWindowMs: input.affinityWindowMs ?? 300000,
+      claimRetryAfterMs: input.claimRetryAfterMs ?? null,
       gateTimeoutMs: input.gateTimeoutMs ?? null,
       version: 1,
       createdBy: input.createdBy ?? null,
@@ -157,6 +160,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.maxConcurrent !== undefined) updateValues.maxConcurrent = changes.maxConcurrent;
     if (changes.maxConcurrentPerRepo !== undefined) updateValues.maxConcurrentPerRepo = changes.maxConcurrentPerRepo;
     if (changes.affinityWindowMs !== undefined) updateValues.affinityWindowMs = changes.affinityWindowMs;
+    if (changes.claimRetryAfterMs !== undefined) updateValues.claimRetryAfterMs = changes.claimRetryAfterMs;
     if (changes.gateTimeoutMs !== undefined) updateValues.gateTimeoutMs = changes.gateTimeoutMs;
     if (changes.version !== undefined) updateValues.version = changes.version;
     if (changes.createdBy !== undefined) updateValues.createdBy = changes.createdBy;
@@ -183,6 +187,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       promptTemplate: state.promptTemplate ?? null,
       constraints: (state.constraints ?? null) as Record<string, unknown> | null,
       onEnter: (state.onEnter ?? null) as OnEnterConfig | null,
+      retryAfterMs: state.retryAfterMs ?? null,
     };
     this.db.transaction((tx) => {
       tx.insert(stateDefinitions).values(row).run();
@@ -202,6 +207,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
     if (changes.promptTemplate !== undefined) updateValues.promptTemplate = changes.promptTemplate;
     if (changes.constraints !== undefined) updateValues.constraints = changes.constraints;
     if (changes.onEnter !== undefined) updateValues.onEnter = changes.onEnter;
+    if (changes.retryAfterMs !== undefined) updateValues.retryAfterMs = changes.retryAfterMs;
 
     if (Object.keys(updateValues).length > 0) {
       this.db.update(stateDefinitions).set(updateValues).where(eq(stateDefinitions.id, stateId)).run();
