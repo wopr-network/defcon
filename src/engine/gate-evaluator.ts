@@ -67,8 +67,10 @@ export async function evaluateGate(
       await gateRepo.record(entity.id, gate.id, false, msg);
       return { passed: false, timedOut: false, output: msg };
     }
-    const [, ...args] = renderedCommand.split(/\s+/);
-    const resolvedPath = validation.resolvedPath ?? renderedCommand.split(/\s+/)[0];
+    // validation.parts is guaranteed non-null when valid is true
+    const parts = validation.parts ?? [renderedCommand];
+    const [executable, ...args] = parts;
+    const resolvedPath = validation.resolvedPath ?? executable;
     const result = await runCommand(resolvedPath, args, effectiveTimeout);
     passed = result.exitCode === 0;
     output = result.output;
