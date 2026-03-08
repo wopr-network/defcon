@@ -519,7 +519,7 @@ export function verifySessionToken(storedTokenHash: string | undefined, incoming
   return timingSafeEqual(storedBuf, incomingBuf);
 }
 
-function extractBearerToken(header: string | undefined): string | undefined {
+export function extractBearerToken(header: string | undefined): string | undefined {
   if (!header) return undefined;
   const lower = header.toLowerCase();
   if (!lower.startsWith("bearer ")) return undefined;

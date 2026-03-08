@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
-import { resolveSessionId, verifySessionToken } from "../../src/execution/cli.js";
+import { resolveSessionId, verifySessionToken, extractBearerToken, validateAdminToken, validateWorkerToken } from "../../src/execution/cli.js";
 
 const CLI = join(import.meta.dirname, "../../src/execution/cli.ts");
 
@@ -246,6 +246,116 @@ describe("verifySessionToken", () => {
   });
 });
 
+describe("extractBearerToken", () => {
+  it("extracts token from valid Bearer header", () => {
+    expect(extractBearerToken("Bearer my-secret-token")).toBe("my-secret-token");
+  });
+
+  it("is case-insensitive for Bearer prefix", () => {
+    expect(extractBearerToken("bearer my-token")).toBe("my-token");
+    expect(extractBearerToken("BEARER my-token")).toBe("my-token");
+  });
+
+  it("trims whitespace from extracted token", () => {
+    expect(extractBearerToken("Bearer   spaced-token  ")).toBe("spaced-token");
+  });
+
+  it("returns undefined for missing header", () => {
+    expect(extractBearerToken(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined for non-Bearer header", () => {
+    expect(extractBearerToken("Basic dXNlcjpwYXNz")).toBeUndefined();
+  });
+
+  it("returns undefined for Bearer with no token", () => {
+    expect(extractBearerToken("Bearer ")).toBeUndefined();
+    expect(extractBearerToken("Bearer")).toBeUndefined();
+  });
+});
+
+describe("validateAdminToken", () => {
+  it("throws when HTTP is active and no admin token", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: undefined, startHttp: true, transport: "stdio" }),
+    ).toThrow("DEFCON_ADMIN_TOKEN must be set");
+  });
+
+  it("throws when SSE transport and no admin token", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: undefined, startHttp: false, transport: "sse" }),
+    ).toThrow("DEFCON_ADMIN_TOKEN must be set");
+  });
+
+  it("throws when token is whitespace-only with HTTP active", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: "   ", startHttp: true, transport: "stdio" }),
+    ).toThrow("DEFCON_ADMIN_TOKEN must be set");
+  });
+
+  it("does not throw for stdio-only without token", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: undefined, startHttp: false, transport: "stdio" }),
+    ).not.toThrow();
+  });
+
+  it("does not throw when token is provided with HTTP", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: "real-token", startHttp: true, transport: "stdio" }),
+    ).not.toThrow();
+  });
+
+  it("does not throw when token is provided with SSE", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: "real-token", startHttp: false, transport: "sse" }),
+    ).not.toThrow();
+  });
+
+  it("handles transport with mixed case and whitespace", () => {
+    expect(() =>
+      validateAdminToken({ adminToken: undefined, startHttp: false, transport: "  SSE  " }),
+    ).toThrow("DEFCON_ADMIN_TOKEN must be set");
+  });
+});
+
+describe("validateWorkerToken", () => {
+  it("throws when HTTP is active and no worker token", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: undefined, startHttp: true, transport: "stdio" }),
+    ).toThrow("DEFCON_WORKER_TOKEN must be set");
+  });
+
+  it("throws when SSE transport and no worker token", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: undefined, startHttp: false, transport: "sse" }),
+    ).toThrow("DEFCON_WORKER_TOKEN must be set");
+  });
+
+  it("throws when token is whitespace-only with HTTP active", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: "   ", startHttp: true, transport: "stdio" }),
+    ).toThrow("DEFCON_WORKER_TOKEN must be set");
+  });
+
+  it("does not throw for stdio-only without token", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: undefined, startHttp: false, transport: "stdio" }),
+    ).not.toThrow();
+  });
+
+  it("does not throw when token is provided with HTTP", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: "real-token", startHttp: true, transport: "stdio" }),
+    ).not.toThrow();
+  });
+
+  it("handles transport with mixed case and whitespace", () => {
+    expect(() =>
+      validateWorkerToken({ workerToken: undefined, startHttp: false, transport: "  SSE  " }),
+    ).toThrow("DEFCON_WORKER_TOKEN must be set");
+  });
+});
+
 describe("CLI validation", () => {
   it("serve rejects non-numeric --reaper-interval", () => {
     const dbPath = join(tmpdir(), `cli-serve-nan-${Date.now()}.db`);
@@ -258,6 +368,27 @@ describe("CLI validation", () => {
     const dbPath = join(tmpdir(), `cli-serve-low-${Date.now()}.db`);
     const output = runExpectFail(["serve", "--reaper-interval", "500"], { AGENTIC_DB_PATH: dbPath });
     expect(output).toMatch(/reaper-interval/i);
+    if (existsSync(dbPath)) rmSync(dbPath);
+  });
+
+  it("serve rejects non-numeric --claim-ttl", () => {
+    const dbPath = join(tmpdir(), `cli-serve-ttl-nan-${Date.now()}.db`);
+    const output = runExpectFail(["serve", "--claim-ttl", "abc"], { AGENTIC_DB_PATH: dbPath });
+    expect(output).toMatch(/claim-ttl/i);
+    if (existsSync(dbPath)) rmSync(dbPath);
+  });
+
+  it("serve rejects --claim-ttl below 5000", () => {
+    const dbPath = join(tmpdir(), `cli-serve-ttl-low-${Date.now()}.db`);
+    const output = runExpectFail(["serve", "--claim-ttl", "1000"], { AGENTIC_DB_PATH: dbPath });
+    expect(output).toMatch(/claim-ttl/i);
+    if (existsSync(dbPath)) rmSync(dbPath);
+  });
+
+  it("serve rejects --http-only and --mcp-only together", () => {
+    const dbPath = join(tmpdir(), `cli-serve-both-${Date.now()}.db`);
+    const output = runExpectFail(["serve", "--http-only", "--mcp-only"], { AGENTIC_DB_PATH: dbPath });
+    expect(output).toMatch(/http-only.*mcp-only|Cannot use/i);
     if (existsSync(dbPath)) rmSync(dbPath);
   });
 
