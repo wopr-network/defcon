@@ -10,17 +10,27 @@ vi.mock("../../src/engine/ssrf-guard.js", () => ({
 
 vi.mock("../../src/engine/gate-command-validator.js", () => ({
   validateGateCommand: (cmd: string) => {
+    // Simulate the shell-parse error path for commands with unterminated quotes.
+    // A quote is unterminated if the count of that quote character is odd (no closing match).
+    if ((cmd.split('"').length - 1) % 2 !== 0 || (cmd.split("'").length - 1) % 2 !== 0) {
+      return { valid: false, resolvedPath: null, error: "Shell parse error: Unterminated double quote", parts: null };
+    }
     // Return a realistic resolvedPath so execFile receives the binary path, not the full command string.
     // This preserves the TOCTOU fix (resolvedPath flows to runCommand) while keeping tests hermetic.
-    const binaryMap: Record<string, string> = {
-      "echo ok": "/usr/bin/echo",
-      "echo ent-1": "/usr/bin/echo",
-      "echo linear-123": "/usr/bin/echo",
-      "exit 1": "/bin/sh",
-      "sleep 10": "/usr/bin/sleep",
-      "echo 'hello world'": "/usr/bin/echo",
+    // parts must reflect actual shell splitting (quotes stripped) so the evaluator passes correct args.
+    const knownCommands: Record<string, { resolvedPath: string; parts: string[] }> = {
+      "echo ok": { resolvedPath: "/usr/bin/echo", parts: ["echo", "ok"] },
+      "echo ent-1": { resolvedPath: "/usr/bin/echo", parts: ["echo", "ent-1"] },
+      "echo linear-123": { resolvedPath: "/usr/bin/echo", parts: ["echo", "linear-123"] },
+      "exit 1": { resolvedPath: "/bin/sh", parts: ["exit", "1"] },
+      "sleep 10": { resolvedPath: "/usr/bin/sleep", parts: ["sleep", "10"] },
+      "echo 'hello world'": { resolvedPath: "/usr/bin/echo", parts: ["echo", "hello world"] },
     };
-    return { valid: true, resolvedPath: binaryMap[cmd] ?? null, error: null };
+    const known = knownCommands[cmd];
+    if (known) {
+      return { valid: true, resolvedPath: known.resolvedPath, error: null, parts: known.parts };
+    }
+    return { valid: true, resolvedPath: null, error: null, parts: cmd.split(" ") };
   },
 }));
 
@@ -503,5 +513,22 @@ describe("evaluateGate", () => {
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/gates\/ directory/);
     expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gates\/ directory/));
+  });
+
+  it("returns passed=false for command gate with unterminated quote — does not throw", async () => {
+    // The command has an unterminated double-quote. validateGateCommand must catch the
+    // splitShellWords error and return { valid: false } so evaluateGate returns a
+    // validation error result rather than propagating the exception.
+    const gate = makeGate({ type: "command", command: 'echo "hello' });
+    const entity = makeEntity();
+    const gateRepo: Pick<IGateRepository, "record"> = {
+      record: vi.fn().mockResolvedValue({}),
+    };
+
+    const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
+    expect(result.passed).toBe(false);
+    expect(result.timedOut).toBe(false);
+    expect(result.output).toMatch(/Gate command not allowed/);
+    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/Gate command not allowed/));
   });
 });

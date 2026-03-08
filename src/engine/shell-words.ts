@@ -37,7 +37,6 @@ export function splitShellWords(cmd: string): string[] {
             i++;
           }
         } else {
-          if (cmd[i] === '"') break;
           current += cmd[i];
           i++;
         }

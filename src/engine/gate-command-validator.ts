@@ -7,6 +7,7 @@ export interface GateCommandValidation {
   valid: boolean;
   resolvedPath: string | null;
   error: string | null;
+  parts: string[] | null;
 }
 
 // Anchor project root and gates directory to module location, not process.cwd()
@@ -16,17 +17,27 @@ const GATES_ROOT = path.resolve(PROJECT_ROOT, "gates");
 
 export function validateGateCommand(command: string): GateCommandValidation {
   if (!command || command.trim().length === 0) {
-    return { valid: false, resolvedPath: null, error: "Gate command is empty" };
+    return { valid: false, resolvedPath: null, error: "Gate command is empty", parts: null };
   }
 
-  const parts = splitShellWords(command);
+  let parts: string[];
+  try {
+    parts = splitShellWords(command);
+  } catch (err) {
+    return {
+      valid: false,
+      resolvedPath: null,
+      error: `Shell parse error: ${err instanceof Error ? err.message : String(err)}`,
+      parts: null,
+    };
+  }
   if (parts.length === 0) {
-    return { valid: false, resolvedPath: null, error: "Gate command is empty" };
+    return { valid: false, resolvedPath: null, error: "Gate command is empty", parts: null };
   }
   const executable = parts[0];
 
   if (path.isAbsolute(executable)) {
-    return { valid: false, resolvedPath: null, error: "Gate command must not use absolute paths" };
+    return { valid: false, resolvedPath: null, error: "Gate command must not use absolute paths", parts: null };
   }
 
   // Resolve relative to project root (command format is gates/<file> from project root)
@@ -39,6 +50,7 @@ export function validateGateCommand(command: string): GateCommandValidation {
       valid: false,
       resolvedPath: null,
       error: `Gate command must start with 'gates/' and resolve inside the gates directory (resolved outside gates/)`,
+      parts: null,
     };
   }
 
@@ -49,7 +61,7 @@ export function validateGateCommand(command: string): GateCommandValidation {
   } catch {
     // Path doesn't exist yet (gate script may be deployed separately) — treat lexical check as sufficient
     // but still reject if it would escape after symlink resolution
-    return { valid: true, resolvedPath: resolved, error: null };
+    return { valid: true, resolvedPath: resolved, error: null, parts };
   }
 
   const realRelative = path.relative(GATES_ROOT, realPath);
@@ -58,8 +70,9 @@ export function validateGateCommand(command: string): GateCommandValidation {
       valid: false,
       resolvedPath: null,
       error: `Gate command resolves via symlink to outside the gates directory`,
+      parts: null,
     };
   }
 
-  return { valid: true, resolvedPath: realPath, error: null };
+  return { valid: true, resolvedPath: realPath, error: null, parts };
 }
