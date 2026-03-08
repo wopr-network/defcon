@@ -369,8 +369,8 @@ describe("MCP tool handlers", () => {
       flow: "nonexistent",
     });
     const content = result.content as Array<{ type: string; text: string }>;
-    const data = JSON.parse(content[0].text);
-    expect(data.next_action).toBe("check_back");
+    expect(result.isError).toBe(true);
+    expect(content[0].text).toContain("not found");
   });
 
   it("flow.get_prompt returns prompt and context", async () => {

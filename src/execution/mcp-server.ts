@@ -541,7 +541,11 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     result = await deps.engine.claimWork(role, flowName, worker_id);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return errorResult(message);
+    const isNotFound = /not found|unknown flow/i.test(message);
+    if (isNotFound) {
+      return errorResult(message);
+    }
+    return jsonResult({ next_action: "check_back", retry_after_ms: RETRY_LONG_MS, message });
   }
   if (result === "all_claimed") {
     return noWorkResult(RETRY_SHORT_MS, role);
