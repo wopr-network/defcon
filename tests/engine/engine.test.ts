@@ -457,6 +457,34 @@ describe("Engine", () => {
       expect(mocks.entityRepo.release).toHaveBeenCalledWith(claimedEntity.id, 'agent:coder');
     });
 
+    it("does not call invocationRepo.fail when claim() returns null in step-8 fallback (race condition)", async () => {
+      const mocks = makeMockRepos();
+      const claimedEntity = makeEntity({ state: "coding", claimedBy: "agent:coder" });
+
+      // Step-8 path: entityRepo.claim (not claimById) succeeds, invocationRepo.claim returns null
+      (mocks.entityRepo.claim as ReturnType<typeof vi.fn>).mockResolvedValue(claimedEntity);
+      (mocks.entityRepo.get as ReturnType<typeof vi.fn>).mockResolvedValue(claimedEntity);
+      // invocationRepo.create returns a new invocation
+      const createdInv: Invocation = {
+        id: "inv-new", entityId: "ent-1", stage: "coding",
+        mode: "active", prompt: "Do the thing", context: null,
+        claimedBy: null, claimedAt: null, startedAt: null, completedAt: null,
+        failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 1800000,
+      };
+      (mocks.invocationRepo.create as ReturnType<typeof vi.fn>).mockResolvedValue(createdInv);
+      // claim returns null — another worker won the race
+      (mocks.invocationRepo.claim as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const engine = new Engine({ ...mocks, adapters: new Map() });
+      const result = await engine.claimWork("coder", "test-flow");
+
+      expect(result).toBeNull();
+      // The invocation is healthy (another worker owns it) — must NOT corrupt it by calling fail()
+      expect(mocks.invocationRepo.fail).not.toHaveBeenCalled();
+      // Entity must be released so the other worker (or future retry) can proceed
+      expect(mocks.entityRepo.release).toHaveBeenCalledWith(claimedEntity.id, "agent:coder");
+    });
+
     it("returns 'all_claimed' when entities exist but none are claimable", async () => {
       const mocks = makeMockRepos();
       (mocks.entityRepo.hasAnyInFlowAndState as ReturnType<typeof vi.fn>).mockResolvedValue(true);

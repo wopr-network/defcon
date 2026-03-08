@@ -593,14 +593,8 @@ export class Engine {
           continue;
         }
         if (!claimedInvocation) {
-          try {
-            await this.invocationRepo.fail(invocation.id, "claim returned null — invocation could not be assigned");
-          } catch (failErr) {
-            this.logger.error(
-              `[engine] invocationRepo.fail() cleanup failed for invocation ${invocation.id}:`,
-              failErr,
-            );
-          }
+          // Another worker won the race and claimed this invocation — it is healthy.
+          // Do NOT call fail(); just release our entity lock and move on.
           try {
             await this.entityRepo.release(claimed.id, entityClaimToken);
           } catch (err) {
