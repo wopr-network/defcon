@@ -599,7 +599,7 @@ describe("processInvocation — releaseClaim() throws", () => {
     expect(releaseClaimMock).toHaveBeenCalledWith(invocation.id);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("releaseClaim failed:"),
-      expect.any(String),
+      expect.any(Error),
     );
     errorSpy.mockRestore();
   });

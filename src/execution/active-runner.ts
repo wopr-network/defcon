@@ -116,10 +116,7 @@ export class ActiveRunner {
       try {
         await this.invocationRepo.releaseClaim(invocation.id);
       } catch (releaseErr) {
-        this.logger.error(
-          "[active-runner] releaseClaim failed:",
-          releaseErr instanceof Error ? releaseErr.message : String(releaseErr),
-        );
+        this.logger.error("[active-runner] releaseClaim failed:", releaseErr);
       }
       return;
     }

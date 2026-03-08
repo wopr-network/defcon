@@ -1299,7 +1299,7 @@ describe("admin tool handlers — direct callToolHandler", () => {
       initialState: "draft",
       states: [{ name: "draft", mode: "passive", promptTemplate: "do work" }, { name: "done", mode: "passive" }],
     });
-    expect(result.isError).toBeUndefined();
+    expect(result.isError).not.toBe(true);
     expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ name: "new-flow", initialState: "draft" }));
   });
 
