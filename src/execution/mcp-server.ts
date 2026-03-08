@@ -527,7 +527,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 // ─── Tool Handlers ───
 
-const AFFINITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const AFFINITY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowClaimSchema, args);

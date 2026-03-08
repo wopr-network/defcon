@@ -92,6 +92,7 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
 
   // Ensure engine is set on mcpDeps
   deps.mcpDeps.engine = deps.engine;
+  if (deps.logger) deps.mcpDeps.logger = deps.logger;
 
   // --- Status ---
   router.add("GET", "/api/status", async () => {
