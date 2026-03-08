@@ -376,14 +376,14 @@ program
         stopReaper,
         closeables: [{ close: () => restHttpServer?.close() }, httpServer, sqlite],
       });
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
     } else if (startMcp) {
       // stdio (default)
       console.error("Starting MCP server on stdio...");
       const cleanup = makeShutdownHandler({ stopReaper, closeables: [sqlite] });
-      process.on("SIGINT", cleanup);
-      process.on("SIGTERM", cleanup);
+      process.once("SIGINT", cleanup);
+      process.once("SIGTERM", cleanup);
       const mcpOpts: McpServerOpts = { adminToken, workerToken, stdioTrusted: true };
       await startStdioServer(deps, mcpOpts);
     } else {
@@ -392,8 +392,8 @@ program
         stopReaper,
         closeables: [{ close: () => restHttpServer?.close() }, sqlite],
       });
-      process.on("SIGINT", cleanup);
-      process.on("SIGTERM", cleanup);
+      process.once("SIGINT", cleanup);
+      process.once("SIGTERM", cleanup);
     }
   });
 
@@ -521,15 +521,15 @@ export function makeShutdownHandler(opts: {
     const timeoutPromise = new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("stopReaper timed out")), stopReaperTimeoutMs),
     );
+    let exitCode = 0;
     Promise.race([stopReaper(), timeoutPromise])
-      .then(() => {
-        for (const c of closeables) c.close();
-        process.exit(0);
-      })
       .catch((err: unknown) => {
         console.error("[shutdown] stopReaper failed:", err);
+        exitCode = 1;
+      })
+      .finally(() => {
         for (const c of closeables) c.close();
-        process.exit(1);
+        process.exit(exitCode);
       });
   };
 }
