@@ -3,26 +3,34 @@ import type http from "node:http";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { Engine } from "../engine/engine.js";
 import type { EngineEvent, IEventBusAdapter } from "../engine/event-types.js";
+import { consoleLogger, type Logger } from "../logger.js";
 
 export interface WebSocketBroadcasterDeps {
   server: http.Server;
   engine: Engine;
   adminToken: string;
+  log?: Logger;
 }
 
 export class WebSocketBroadcaster implements IEventBusAdapter {
   private wss: WebSocketServer;
   private engine: Engine;
   private adminToken: string;
+  private log: Logger;
+  private upgradeHandler: (req: http.IncomingMessage, socket: import("node:stream").Duplex, head: Buffer) => void;
+  private server: http.Server;
 
   constructor(deps: WebSocketBroadcasterDeps) {
     this.engine = deps.engine;
     this.adminToken = deps.adminToken;
+    this.log = deps.log ?? consoleLogger;
+    this.server = deps.server;
     this.wss = new WebSocketServer({ noServer: true });
 
-    deps.server.on("upgrade", (req, socket, head) => {
+    this.upgradeHandler = (req, socket, head) => {
       if (!this.isWsPath(req.url)) {
-        socket.destroy();
+        // Not a WebSocket path — let other upgrade handlers deal with it or emit error
+        socket.emit("error", new Error("Unhandled upgrade request"));
         return;
       }
 
@@ -35,10 +43,12 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.wss.emit("connection", ws, req);
       });
-    });
+    };
 
-    this.wss.on("connection", (ws) => {
-      this.sendSnapshot(ws);
+    deps.server.on("upgrade", this.upgradeHandler);
+
+    this.wss.on("connection", async (ws) => {
+      await this.sendSnapshot(ws);
       ws.on("close", () => {
         // Client removed automatically from wss.clients on close
       });
@@ -62,7 +72,7 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
       }
     }
 
-    // Try ?token= query param
+    // Try ?token= query param — do NOT log the URL as it contains the token
     const url = new URL(req.url ?? "/", "http://localhost");
     const queryToken = url.searchParams.get("token");
     if (queryToken && this.tokenMatches(queryToken)) return true;
@@ -87,7 +97,8 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
       if (ws.readyState === ws.OPEN) {
         ws.send(msg);
       }
-    } catch {
+    } catch (err) {
+      this.log.error("sendSnapshot failed", err);
       if (ws.readyState === ws.OPEN) {
         ws.send(
           JSON.stringify({
@@ -109,7 +120,11 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
     });
     for (const client of this.wss.clients) {
       if (client.readyState === client.OPEN) {
-        client.send(msg);
+        try {
+          client.send(msg);
+        } catch (err) {
+          this.log.error("WebSocket send failed for client", err);
+        }
       }
     }
   }
@@ -119,6 +134,7 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
   }
 
   close(): Promise<void> {
+    this.server.off("upgrade", this.upgradeHandler);
     for (const client of this.wss.clients) {
       client.terminate();
     }

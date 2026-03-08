@@ -270,6 +270,7 @@ program
     }
 
     let restHttpServer: ReturnType<typeof createHttpServer> | undefined;
+    let wsBroadcaster: WebSocketBroadcaster | undefined;
     if (startHttp) {
       const httpPort = parseInt(opts.httpPort as string, 10);
       const httpHost = opts.httpHost as string;
@@ -290,7 +291,7 @@ program
         corsOrigin: restCorsResult.origin ?? undefined,
       });
       if (adminToken) {
-        const wsBroadcaster = new WebSocketBroadcaster({
+        wsBroadcaster = new WebSocketBroadcaster({
           server: restHttpServer,
           engine,
           adminToken,
@@ -393,7 +394,12 @@ program
 
       const shutdown = makeShutdownHandler({
         stopReaper,
-        closeables: [{ close: () => restHttpServer?.close() }, httpServer, sqlite],
+        closeables: [
+          { close: () => wsBroadcaster?.close() },
+          { close: () => restHttpServer?.close() },
+          httpServer,
+          sqlite,
+        ],
       });
       process.once("SIGINT", shutdown);
       process.once("SIGTERM", shutdown);
@@ -409,7 +415,7 @@ program
       // HTTP-only mode — keep process alive
       const cleanup = makeShutdownHandler({
         stopReaper,
-        closeables: [{ close: () => restHttpServer?.close() }, sqlite],
+        closeables: [{ close: () => wsBroadcaster?.close() }, { close: () => restHttpServer?.close() }, sqlite],
       });
       process.once("SIGINT", cleanup);
       process.once("SIGTERM", cleanup);
