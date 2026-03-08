@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { DEFAULT_TIMEOUT_PROMPT } from "../engine/constants.js";
 import type { Engine } from "../engine/engine.js";
+import { isTerminal } from "../engine/state-machine.js";
 import type { Logger } from "../logger.js";
 import { consoleLogger } from "../logger.js";
 import type {
@@ -746,14 +747,30 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
       (inv) => inv.completedAt === null && inv.failedAt === null && inv.id !== activeInvocation.id,
     );
     if (!hasActiveOrUnclaimed) {
-      await deps.invocations.create(
-        entityId,
-        activeInvocation.stage,
-        activeInvocation.prompt,
-        activeInvocation.mode,
-        undefined,
-        activeInvocation.context ?? undefined,
-      );
+      // Re-fetch the entity to check if processSignal partially advanced state
+      // to a terminal state before throwing. If so, do not create a replacement —
+      // the entity is done and no further invocations should be created.
+      const currentEntity = await deps.entities.get(entityId);
+      const flow = currentEntity ? await deps.flows.get(currentEntity.flowId) : null;
+      const entityIsTerminal = currentEntity && flow ? isTerminal(flow, currentEntity.state) : false;
+      if (!entityIsTerminal) {
+        const replacement = await deps.invocations.create(
+          entityId,
+          activeInvocation.stage,
+          activeInvocation.prompt,
+          activeInvocation.mode,
+          undefined,
+          activeInvocation.context ?? undefined,
+        );
+        // Claim the replacement for the same worker so it can retry immediately.
+        if (workerId && replacement) {
+          try {
+            await deps.invocations.claim(replacement.id, workerId);
+          } catch (claimErr) {
+            log.error(`Failed to claim replacement invocation ${replacement.id} for worker ${workerId}:`, claimErr);
+          }
+        }
+      }
     }
     return errorResult(message);
   }
