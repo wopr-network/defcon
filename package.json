@@ -1,6 +1,6 @@
 {
   "name": "@wopr-network/defcon",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -61,5 +61,15 @@
     "onlyBuiltDependencies": [
       "better-sqlite3"
     ]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "release": {
+    "extends": "@wopr-network/semantic-release-config"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wopr-network/defcon.git"
   }
 }
