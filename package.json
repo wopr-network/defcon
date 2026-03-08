@@ -61,5 +61,15 @@
     "onlyBuiltDependencies": [
       "better-sqlite3"
     ]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "release": {
+    "extends": "@wopr-network/semantic-release-config"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wopr-network/defcon.git"
   }
 }
