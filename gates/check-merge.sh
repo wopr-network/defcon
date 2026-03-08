@@ -34,7 +34,7 @@ while true; do
   # Check for CI failure in merge queue
   if [ "$MERGE_STATUS" = "DIRTY" ] || [ "$MERGE_STATUS" = "BLOCKED" ] || [ "$MERGE_STATUS" = "UNSTABLE" ]; then
     RESULT=$(gh pr view "$PR" --repo "$REPO" --json state,mergeStateStatus,statusCheckRollup \
-      --jq '{state: .state, mergeStatus: .mergeStateStatus, failing: [.statusCheckRollup // [] | .[] | select(.conclusion == "FAILURE") | .name]}')
+      --jq '{state: .state, mergeStatus: .mergeStateStatus, failing: [.statusCheckRollup // [] | .[] | select(.conclusion == "FAILURE") | .name]}' 2>/dev/null) || continue
     FAILING=$(echo "$RESULT" | jq -r '.failing[]' 2>/dev/null)
     if [ -n "$FAILING" ]; then
       echo "CI failing in merge queue: $FAILING"

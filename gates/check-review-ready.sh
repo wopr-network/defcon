@@ -9,7 +9,7 @@ REPO="${2:?Usage: check-review-ready.sh <pr-number> <repo>}"
 # Check 1: All CI checks passing
 echo "Checking CI status..."
 CHECKS_OUTPUT=$(gh pr checks "$PR" --repo "$REPO" 2>&1) || true
-if echo "$CHECKS_OUTPUT" | grep -qE '^\s*(fail|FAIL)'; then
+if echo "$CHECKS_OUTPUT" | grep -qiE '\bfail\b'; then
   echo "CI checks failing for PR #$PR in $REPO"
   exit 1
 fi
