@@ -6,8 +6,7 @@
       "initialState": "backlog",
       "maxConcurrent": 0,
       "maxConcurrentPerRepo": 0,
-      "discipline": "coder",
-      "gateTimeoutMs": 500
+      "discipline": "coder"
     }
   ],
   "states": [

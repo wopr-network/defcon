@@ -907,7 +907,7 @@ async function handleAdminFlowPause(deps: McpServerDeps, args: Record<string, un
 }
 
 async function handleAdminFlowResume(deps: McpServerDeps, args: Record<string, unknown>) {
-  const v = validateInput(AdminFlowRestoreSchema, args);
+  const v = validateInput(AdminFlowPauseSchema, args);
   if (!v.ok) return v.result;
   const flow = await deps.flows.getByName(v.data.flow_name);
   if (!flow) return errorResult(`Flow not found: ${v.data.flow_name}`);

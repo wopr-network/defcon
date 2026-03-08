@@ -124,22 +124,22 @@ async function connectWS(
 	const messages: Array<Record<string, unknown>> = [];
 	const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${ADMIN_TOKEN}`);
 
-	// Wait for snapshot (first message)
+	// Wait for snapshot (first message) — use once() so this handler does not
+	// interfere with the subsequent collector registered below.
 	await new Promise<void>((res, rej) => {
 		ws.on("error", rej);
-		ws.on("message", (data) => {
+		ws.once("message", (data) => {
 			const msg = JSON.parse(data.toString()) as Record<string, unknown>;
-			if (msg.type === "snapshot") {
-				res();
-			} else {
+			if (msg.type !== "snapshot") {
 				// Edge case: non-snapshot first message — collect it
 				messages.push(msg);
-				res();
 			}
+			res();
 		});
 	});
 
-	// Collect all subsequent messages
+	// Collect all subsequent messages — registered after the snapshot handler
+	// completes so there is no overlap.
 	ws.on("message", (data) => {
 		messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
 	});
@@ -159,6 +159,19 @@ function workerHeaders(): Record<string, string> {
 		"Content-Type": "application/json",
 		Authorization: `Bearer ${WORKER_TOKEN}`,
 	};
+}
+
+async function waitFor(
+	condition: () => Promise<boolean>,
+	timeoutMs = 5000,
+	intervalMs = 50,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (await condition()) return;
+		await new Promise((r) => setTimeout(r, intervalMs));
+	}
+	throw new Error("waitFor timed out");
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -288,8 +301,15 @@ describe("E2E: full-stack defcon flow", { timeout: 15000 }, () => {
 			// Approve via engine
 			await ctx.engine.processSignal(entity.id, "approve");
 
-			// Give WS a moment to receive all broadcast events
-			await new Promise((r) => setTimeout(r, 300));
+			// Wait until all expected WS broadcast events have arrived
+			await waitFor(async () => {
+				const t = messages.map((m) => m.type);
+				return (
+					t.includes("entity.created") &&
+					t.includes("entity.transitioned") &&
+					t.includes("gate.passed")
+				);
+			});
 
 			const types = messages.map((m) => m.type);
 
@@ -352,10 +372,15 @@ describe("E2E: full-stack defcon flow", { timeout: 15000 }, () => {
 			const claimData = (await claimRes.json()) as { next_action: string };
 			expect(claimData.next_action).toBe("check_back");
 
-			// Resume via flowRepo directly (the REST resume endpoint has a validation
-			// bug in the underlying tool handler that is tracked separately)
-			const flow = await ctx.flowRepo.getByName("e2e-pipeline");
-			await ctx.flowRepo.update(flow!.id, { paused: false });
+			// Resume via admin REST endpoint
+			const resumeRes = await fetch(
+				`http://127.0.0.1:${ctx.port}/api/admin/flows/e2e-pipeline/resume`,
+				{
+					method: "POST",
+					headers: adminHeaders(),
+				},
+			);
+			expect(resumeRes.status).toBe(200);
 
 			// Claim should now succeed
 			const claimRes2 = await fetch(`http://127.0.0.1:${ctx.port}/api/claim`, {
@@ -435,7 +460,7 @@ describe("E2E: full-stack defcon flow", { timeout: 15000 }, () => {
 	// ─── Group 4: Gate timeout / check_back path ──────────────────────────────
 
 	describe("Group 4: gate timeout / check_back path", () => {
-		it("gate timeout returns check_back response via REST", async () => {
+		it("gate timeout blocks state transition and leaves entity in original state", async () => {
 			const seedPath = resolve(
 				__dirname,
 				"../../tests/engine/fixtures/timeout-gate-flow.seed.json",
@@ -508,8 +533,8 @@ describe("E2E: full-stack defcon flow", { timeout: 15000 }, () => {
 			// Trigger validate signal directly — gate times out (500ms)
 			await ctx.engine.processSignal(entity.id, "validate");
 
-			// Give WS time to receive broadcast events
-			await new Promise((r) => setTimeout(r, 500));
+			// Wait until the gate.timedOut event has arrived on the WS client
+			await waitFor(async () => messages.some((m) => m.type === "gate.timedOut"), 3000);
 
 			const types = messages.map((m) => m.type);
 			expect(types).toContain("entity.created");
