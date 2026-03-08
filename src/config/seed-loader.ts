@@ -1,6 +1,7 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { sql } from "drizzle-orm";
+// raw-sql: intentional — seed-loader is not a repository; it needs direct transaction control
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type * as schema from "../repositories/drizzle/schema.js";
 import type { IFlowRepository, IGateRepository } from "../repositories/interfaces.js";
@@ -78,6 +79,7 @@ async function parseSeedAndLoad(
 ): Promise<LoadSeedResult> {
   const parsed = SeedFileSchema.parse(json);
 
+  // raw-sql: drizzle better-sqlite3 .transaction() is sync-only; using db.run(sql) allows async repo calls within the same transaction boundary
   db.run(sql`BEGIN`);
   try {
     // 1. Create gates first (transitions reference them by name)
@@ -144,9 +146,15 @@ async function parseSeedAndLoad(
       }
     }
 
+    // raw-sql: drizzle better-sqlite3 .transaction() is sync-only; using db.run(sql) allows async repo calls within the same transaction boundary
     db.run(sql`COMMIT`);
   } catch (err) {
-    db.run(sql`ROLLBACK`);
+    // raw-sql: drizzle better-sqlite3 .transaction() is sync-only; using db.run(sql) allows async repo calls within the same transaction boundary
+    try {
+      db.run(sql`ROLLBACK`);
+    } catch {
+      /* ignore rollback errors */
+    }
     throw err;
   }
 
