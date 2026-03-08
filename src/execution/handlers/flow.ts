@@ -140,21 +140,34 @@ export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, 
   for (const invocation of allCandidates) {
     const entity = entityMap.get(invocation.entityId);
 
+    // Finding 3: If entity is not in the entityMap, the invocation is orphaned.
+    // Release the invocation and skip to avoid dead-ending the work item.
+    if (!entity) {
+      await deps.invocations.claim(invocation.id, claimerId).catch(() => {});
+      continue;
+    }
+
     // Claim entity first to establish ownership, then claim the invocation.
     // If invocation claim loses a race (returns null), release the entity so
     // another worker can pick it up.
     let claimedEntity: Awaited<ReturnType<typeof deps.entities.claimById>> = null;
-    if (entity) {
-      try {
-        claimedEntity = await deps.entities.claimById(entity.id, claimerId);
-      } catch (err) {
-        console.error(`Failed to claim entity ${entity.id}:`, err);
-        continue;
-      }
-      if (!claimedEntity) {
-        // Another worker claimed this entity first — skip.
-        continue;
-      }
+    try {
+      claimedEntity = await deps.entities.claimById(entity.id, claimerId);
+    } catch (err) {
+      console.error(`Failed to claim entity ${entity.id}:`, err);
+      continue;
+    }
+    if (!claimedEntity) {
+      // Another worker claimed this entity first — skip.
+      continue;
+    }
+
+    // Finding 1: Verify entity state still matches invocation stage after claiming.
+    // A race can leave stale invocation data if the entity changed state between
+    // the invocation query and the entity claim.
+    if (claimedEntity.state !== invocation.stage) {
+      await deps.entities.release(entity.id, claimerId).catch(() => {});
+      return noWorkResult(RETRY_SHORT_MS, role);
     }
 
     let claimed: Awaited<ReturnType<typeof deps.invocations.claim>>;
@@ -185,6 +198,21 @@ export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, 
         console.error(`Failed to set affinity for entity ${claimed.entityId}:`, err);
       }
     }
+    // Finding 2: Emit entity.claimed event for WebSocket broadcast.
+    if (deps.engine) {
+      deps.engine
+        .emit({
+          type: "entity.claimed",
+          entityId: entity.id,
+          flowId: entity.flowId,
+          agentId: claimerId,
+          emittedAt: new Date(),
+        })
+        .catch((err: unknown) => {
+          console.error(`Failed to emit entity.claimed for entity ${entity.id}:`, err);
+        });
+    }
+
     return jsonResult({
       worker_id: worker_id,
       entity_id: claimed.entityId,

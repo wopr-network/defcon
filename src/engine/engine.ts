@@ -102,6 +102,10 @@ export class Engine {
     return Array.from(this.drainingWorkers);
   }
 
+  async emit(event: import("./event-types.js").EngineEvent): Promise<void> {
+    await this.eventEmitter.emit(event);
+  }
+
   async processSignal(
     entityId: string,
     signal: string,
