@@ -150,7 +150,11 @@ async function parseSeedAndLoad(
       gates: parsed.gates.length,
     };
   } catch (err) {
-    if (db) db.run(sql`ROLLBACK`);
+    try {
+      if (db) db.run(sql`ROLLBACK`);
+    } catch {
+      // ignore rollback errors — original error takes priority
+    }
     throw err;
   }
 }

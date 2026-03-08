@@ -51,7 +51,7 @@ const tmpRoot = realpathSync(tmpdir());
 
 describe("loadSeed", () => {
   it("loads a valid seed file and creates all records", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seedPath = writeSeedFile(validSeed);
 
     const result = await loadSeed(seedPath, flowRepo, gateRepo, { allowedRoot: tmpRoot });
@@ -74,7 +74,7 @@ describe("loadSeed", () => {
   });
 
   it("rejects invalid seed file with Zod errors", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seedPath = writeSeedFile({ flows: [], states: [], transitions: [] });
 
     await expect(loadSeed(seedPath, flowRepo, gateRepo, { allowedRoot: tmpRoot })).rejects.toThrow();
@@ -83,7 +83,7 @@ describe("loadSeed", () => {
   });
 
   it("rejects non-existent file", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
 
     await expect(loadSeed(join(tmpRoot, "nonexistent-seed.json"), flowRepo, gateRepo, { allowedRoot: tmpRoot })).rejects.toThrow();
 
@@ -91,7 +91,7 @@ describe("loadSeed", () => {
   });
 
   it("loads seed without gates", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seed = {
       flows: [{ name: "simple", initialState: "start", discipline: "engineering" }],
       states: [{ name: "start", flowName: "simple" }],
@@ -106,7 +106,7 @@ describe("loadSeed", () => {
   });
 
   it("throws a descriptive error when a transition references an unknown gate", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seed = {
       flows: [{ name: "broken", initialState: "start", discipline: "engineering" }],
       states: [{ name: "start", flowName: "broken" }, { name: "end", flowName: "broken" }],
@@ -126,7 +126,7 @@ describe("loadSeed", () => {
   });
 
   it("rejects a seed path outside the allowed root", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
 
     await expect(
       loadSeed("/etc/passwd", flowRepo, gateRepo, { allowedRoot: "/home/fake" }),
@@ -136,7 +136,7 @@ describe("loadSeed", () => {
   });
 
   it("rejects path traversal via relative segments", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const cwd = process.cwd();
 
     await expect(
@@ -147,7 +147,7 @@ describe("loadSeed", () => {
   });
 
   it("rejects symlink escape", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
 
     const dir = join(tmpRoot, `seed-symlink-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
@@ -168,7 +168,7 @@ describe("loadSeed", () => {
 
   it("rejects a path whose prefix matches root but is not a child", async () => {
     // startsWith("/tmp/foo/") would allow /tmp/foobar — relative() check prevents this
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const dir = join(tmpRoot, `seed-prefix-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const adjacentDir = dir + "-other";
@@ -184,7 +184,7 @@ describe("loadSeed", () => {
   });
 
   it("throws a friendly error on malformed JSON", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const dir = join(tmpRoot, `seed-malformed-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const seedPath = join(dir, "bad.json");
@@ -198,7 +198,7 @@ describe("loadSeed", () => {
   });
 
   it("preserves SyntaxError cause on malformed JSON", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const dir = join(tmpRoot, `seed-cause-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const seedPath = join(dir, "bad.json");
@@ -218,7 +218,7 @@ describe("loadSeed", () => {
   });
 
   it("accepts a seed path within the allowed root", async () => {
-    const { db, sqlite, flowRepo, gateRepo } = setupDb();
+    const { sqlite, flowRepo, gateRepo } = setupDb();
     const seedPath = writeSeedFile(validSeed);
 
     const result = await loadSeed(seedPath, flowRepo, gateRepo, { allowedRoot: tmpRoot });
