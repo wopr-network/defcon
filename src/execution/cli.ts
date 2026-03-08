@@ -36,7 +36,7 @@ import type { McpServerDeps, McpServerOpts } from "./mcp-server.js";
 import { createMcpServer, startStdioServer } from "./mcp-server.js";
 import { provisionWorktree } from "./provision-worktree.js";
 
-const DB_DEFAULT = process.env.AGENTIC_DB_PATH ?? "./agentic-flow.db";
+const DB_DEFAULT = process.env.DEFCON_DB_PATH ?? "./defcon.db";
 
 /**
  * Validates that DEFCON_ADMIN_TOKEN is set when network transports are active.
