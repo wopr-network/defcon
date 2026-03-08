@@ -289,6 +289,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       updatedAt: flow.updatedAt,
       discipline: flow.discipline,
       defaultModelTier: flow.defaultModelTier,
+      claimRetryAfterMs: flow.claimRetryAfterMs,
       states: flow.states,
       transitions: flow.transitions,
     };
@@ -345,6 +346,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
       createdBy: string | null;
       discipline: string | null;
       defaultModelTier: string | null;
+      claimRetryAfterMs: number | null;
       timeoutPrompt: string | null;
       states: State[];
       transitions: Transition[];
@@ -401,6 +403,7 @@ export class DrizzleFlowRepository implements IFlowRepository {
           createdBy: snap.createdBy,
           discipline: snap.discipline,
           defaultModelTier: snap.defaultModelTier ?? null,
+          claimRetryAfterMs: snap.claimRetryAfterMs ?? null,
           timeoutPrompt: snap.timeoutPrompt,
           updatedAt: Date.now(),
         })

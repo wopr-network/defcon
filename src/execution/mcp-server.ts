@@ -33,8 +33,8 @@ import {
   AdminTransitionUpdateSchema,
   AdminWorkerDrainSchema,
 } from "./admin-schemas.js";
+import { handleFlowClaim } from "./handlers/flow.js";
 import {
-  FlowClaimSchema,
   FlowFailSchema,
   FlowGetPromptSchema,
   FlowReportSchema,
@@ -570,17 +570,6 @@ function errorResult(message: string) {
   };
 }
 
-const RETRY_SHORT_MS = 30_000; // work exists but all entities currently claimed
-const RETRY_LONG_MS = 300_000; // backlog empty
-
-function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jsonResult> {
-  return jsonResult({
-    next_action: "check_back",
-    retry_after_ms: retryAfterMs,
-    message: `No work available for role '${role}' right now. Call flow.claim again after the retry delay.`,
-  });
-}
-
 function constantTimeEqual(a: string, b: string): boolean {
   const hashA = createHash("sha256").update(a.trim()).digest();
   const hashB = createHash("sha256").update(b.trim()).digest();
@@ -588,44 +577,6 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 // ─── Tool Handlers ───
-
-async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
-  const v = validateInput(FlowClaimSchema, args);
-  if (!v.ok) return v.result;
-  const { worker_id, role, flow: flowName } = v.data;
-
-  if (!deps.engine) {
-    return errorResult("Engine not available — MCP server started without engine dependency");
-  }
-
-  let result: Awaited<ReturnType<typeof deps.engine.claimWork>>;
-  try {
-    result = await deps.engine.claimWork(role, flowName, worker_id);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const isNotFound = /not found|unknown flow/i.test(message);
-    if (isNotFound) {
-      return errorResult(message);
-    }
-    return jsonResult({ next_action: "check_back", retry_after_ms: RETRY_LONG_MS, message });
-  }
-  if (result === "all_claimed") {
-    return noWorkResult(RETRY_SHORT_MS, role);
-  }
-  if (!result) {
-    return noWorkResult(RETRY_LONG_MS, role);
-  }
-
-  return jsonResult({
-    worker_id: worker_id,
-    entity_id: result.entityId,
-    invocation_id: result.invocationId,
-    flow: result.flowName,
-    stage: result.stage,
-    prompt: result.prompt,
-    context: result.context,
-  });
-}
 
 async function handleFlowGetPrompt(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowGetPromptSchema, args);
