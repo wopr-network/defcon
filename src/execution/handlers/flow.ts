@@ -17,8 +17,7 @@ function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jso
 export async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown>) {
   const v = validateInput(FlowClaimSchema, args);
   if (!v.ok) return v.result;
-  const { workerId: camelWorkerId, worker_id: snakeWorkerId, role, flow: flowName } = v.data;
-  const workerId = snakeWorkerId ?? camelWorkerId;
+  const { worker_id: workerId, role, flow: flowName } = v.data;
 
   // 1. Find candidate flows filtered by discipline
   let candidateFlows: import("../../repositories/interfaces.js").Flow[] = [];

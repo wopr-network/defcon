@@ -653,7 +653,7 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
         await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
       }
       return jsonResult({
-        workerId,
+        worker_id: workerId,
         entity_id: claimed.entityId,
         invocation_id: claimed.id,
         flow: flow?.name ?? null,

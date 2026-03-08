@@ -385,7 +385,7 @@ export class Engine {
     return entity;
   }
 
-  async claimWork(role: string, flowName?: string, workerId?: string): Promise<ClaimWorkResult | null> {
+  async claimWork(role: string, flowName?: string, worker_id?: string): Promise<ClaimWorkResult | null> {
     let flows: Flow[];
     if (flowName) {
       const flow = await this.flowRepo.getByName(flowName);
@@ -397,13 +397,13 @@ export class Engine {
     }
 
     for (const flow of flows) {
-      // Try affinity match first if workerId provided
-      if (workerId) {
-        const affinityUnclaimed = await this.invocationRepo.findUnclaimedWithAffinity(flow.id, role, workerId);
+      // Try affinity match first if worker_id provided
+      if (worker_id) {
+        const affinityUnclaimed = await this.invocationRepo.findUnclaimedWithAffinity(flow.id, role, worker_id);
         for (const pending of affinityUnclaimed) {
           const claimed = await this.entityRepo.claimById(pending.entityId, `agent:${role}`);
           if (!claimed) continue;
-          const result = await this.tryClaimInvocation(pending, claimed, flow, role, workerId);
+          const result = await this.tryClaimInvocation(pending, claimed, flow, role, worker_id);
           if (result) return result;
         }
       }
@@ -414,7 +414,7 @@ export class Engine {
       for (const pending of unclaimed) {
         const claimed = await this.entityRepo.claim(flow.id, pending.stage, `agent:${role}`);
         if (!claimed) continue;
-        const result = await this.tryClaimInvocation(pending, claimed, flow, role, workerId);
+        const result = await this.tryClaimInvocation(pending, claimed, flow, role, worker_id);
         if (result) return result;
       }
 
@@ -424,7 +424,7 @@ export class Engine {
         const claimed = await this.entityRepo.claim(flow.id, state.name, `agent:${role}`);
         if (!claimed) continue;
 
-        await this.setAffinityIfNeeded(claimed.id, flow, role, workerId);
+        await this.setAffinityIfNeeded(claimed.id, flow, role, worker_id);
         const build = await this.buildPrompt(state, claimed, flow);
         const invocation = await this.invocationRepo.create(
           claimed.id,
@@ -453,7 +453,7 @@ export class Engine {
     claimed: Entity,
     flow: Flow,
     role: string,
-    workerId?: string,
+    worker_id?: string,
   ): Promise<ClaimWorkResult | null> {
     const claimedInvocation = await this.invocationRepo.claim(pending.id, `agent:${role}`);
     if (!claimedInvocation) {
@@ -465,7 +465,7 @@ export class Engine {
       return null;
     }
 
-    await this.setAffinityIfNeeded(claimed.id, flow, role, workerId);
+    await this.setAffinityIfNeeded(claimed.id, flow, role, worker_id);
 
     const state = flow.states.find((s) => s.name === pending.stage);
     const build = state ? await this.buildPrompt(state, claimed, flow) : { prompt: pending.prompt, context: null };
@@ -473,13 +473,13 @@ export class Engine {
     return this.emitAndReturn(claimed, claimedInvocation.id, build, flow, role);
   }
 
-  private async setAffinityIfNeeded(entityId: string, flow: Flow, role: string, workerId?: string): Promise<void> {
-    if (!workerId) return;
+  private async setAffinityIfNeeded(entityId: string, flow: Flow, role: string, worker_id?: string): Promise<void> {
+    if (!worker_id) return;
     const affinityWindow = flow.affinityWindowMs ?? 300000;
     try {
-      await this.entityRepo.setAffinity(entityId, workerId, role, new Date(Date.now() + affinityWindow));
+      await this.entityRepo.setAffinity(entityId, worker_id, role, new Date(Date.now() + affinityWindow));
     } catch (err) {
-      this.logger.warn(`setAffinity failed for entity ${entityId} worker ${workerId} — continuing:`, err);
+      this.logger.warn(`setAffinity failed for entity ${entityId} worker ${worker_id} — continuing:`, err);
     }
   }
 
