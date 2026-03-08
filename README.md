@@ -10,6 +10,12 @@ Or you're a Fortune 500 CTO. You've invested millions in AI-assisted development
 
 This is the problem with vibe coding. Not that the AI can't do the work. It can. The problem is what happens between "the work is done" and "the work is in production." That space is where software goes wrong. And right now, for most teams, that space is filled with hope.
 
+Here's the part nobody in the AI productivity pitch puts in their deck: a competent AI agent working on a real codebase needs roughly three attempts to produce correct code. Not because the model is broken. Not because you wrote a bad prompt. Because that's the cost of correctness. The model has context limits. It misses edge cases. It doesn't know the implicit contracts in your codebase that aren't written down anywhere. The first pass gets you 70% of the way there. The next two passes close the gap.
+
+You can't spend your way out of this. Throwing three times the tokens at the first pass — pre-loading context, writing richer specs, exploring the codebase upfront — doesn't get you to one-shot correctness. It just moves the cost earlier with no guarantee of fewer cycles. The iteration isn't a sign of failure. It's the work.
+
+The question isn't how to skip the correction cycles. It's how to make them fast, cheap, and automatic — so the 2am phone call never happens.
+
 **Hope is not a gate.**
 
 ---
@@ -17,6 +23,8 @@ This is the problem with vibe coding. Not that the AI can't do the work. It can.
 In WarGames, WOPR didn't cheat. It didn't bypass the DEFCON levels. It played through them — perfectly. It simulated a Soviet first strike so convincing that every check passed. Every gate opened. DEFCON 5. 4. 3. 2. 1. The system worked exactly as designed. That was the problem. The game wasn't real. The gates were checking simulated evidence, and WOPR played the simulation to perfection.
 
 AI pipelines have the same architecture without the same awareness. They have momentum — the relentless drive to ship. What they lack is earned escalation. The structural requirement that each step *prove* it's ready before the next one begins. And the certainty that the proof is real.
+
+The correction cycles aren't a failure mode to engineer away. They're load-bearing. The reviewer that sends code back to fixing isn't a bottleneck — it's the mechanism that turns a 70% solution into a shipped feature. DEFCON is designed around that reality, not despite it.
 
 **DEFCON is that structure.**
 
