@@ -33,4 +33,5 @@ export function bootstrap(dbPath = DB_PATH): {
   return { db, sqlite };
 }
 
+export * from "./api/wire-types.js";
 export * from "./engine/index.js";
