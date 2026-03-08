@@ -112,7 +112,7 @@ export class DrizzleGateRepository implements IGateRepository {
   }
 
   async clearResult(entityId: string, gateId: string): Promise<void> {
-    this.db
+    await this.db
       .delete(gateResults)
       .where(and(eq(gateResults.entityId, entityId), eq(gateResults.gateId, gateId)))
       .run();

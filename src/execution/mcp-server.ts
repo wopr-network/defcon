@@ -900,6 +900,7 @@ async function handleAdminFlowPause(deps: McpServerDeps, args: Record<string, un
   if (!v.ok) return v.result;
   const flow = await deps.flows.getByName(v.data.flow_name);
   if (!flow) return errorResult(`Flow not found: ${v.data.flow_name}`);
+  await deps.flows.snapshot(flow.id);
   await deps.flows.update(flow.id, { paused: true });
   emitDefinitionChanged(deps.eventRepo, flow.id, "admin.flow.pause", { name: v.data.flow_name });
   return jsonResult({ paused: true, flow: v.data.flow_name });
@@ -910,6 +911,7 @@ async function handleAdminFlowResume(deps: McpServerDeps, args: Record<string, u
   if (!v.ok) return v.result;
   const flow = await deps.flows.getByName(v.data.flow_name);
   if (!flow) return errorResult(`Flow not found: ${v.data.flow_name}`);
+  await deps.flows.snapshot(flow.id);
   await deps.flows.update(flow.id, { paused: false });
   emitDefinitionChanged(deps.eventRepo, flow.id, "admin.flow.resume", { name: v.data.flow_name });
   return jsonResult({ paused: false, flow: v.data.flow_name });
@@ -920,6 +922,10 @@ async function handleAdminEntityCancel(deps: McpServerDeps, args: Record<string,
   if (!v.ok) return v.result;
   const entity = await deps.entities.get(v.data.entity_id);
   if (!entity) return errorResult(`Entity not found: ${v.data.entity_id}`);
+  const flow = await deps.flows.get(entity.flowId);
+  if (!flow) return errorResult(`Flow not found for entity: ${v.data.entity_id}`);
+  const cancelledState = flow.states.find((s) => s.name === "cancelled");
+  if (!cancelledState) return errorResult(`State 'cancelled' not found in flow '${flow.name}'`);
   const invocations = await deps.invocations.findByEntity(v.data.entity_id);
   for (const inv of invocations) {
     if (inv.completedAt === null && inv.failedAt === null) {
@@ -927,6 +933,14 @@ async function handleAdminEntityCancel(deps: McpServerDeps, args: Record<string,
     }
   }
   await deps.entities.cancelEntity(v.data.entity_id);
+  await deps.transitions.record({
+    entityId: v.data.entity_id,
+    fromState: entity.state,
+    toState: "cancelled",
+    trigger: "admin.cancel",
+    invocationId: null,
+    timestamp: new Date(),
+  });
   return jsonResult({ cancelled: true, entity_id: v.data.entity_id });
 }
 
@@ -946,6 +960,14 @@ async function handleAdminEntityReset(deps: McpServerDeps, args: Record<string, 
     }
   }
   const updated = await deps.entities.resetEntity(v.data.entity_id, v.data.target_state);
+  await deps.transitions.record({
+    entityId: v.data.entity_id,
+    fromState: entity.state,
+    toState: updated.state,
+    trigger: "admin.reset",
+    invocationId: null,
+    timestamp: new Date(),
+  });
   return jsonResult({ reset: true, entity_id: v.data.entity_id, state: updated.state });
 }
 

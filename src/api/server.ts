@@ -295,27 +295,27 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
   });
 
   // --- Admin: Drain/Undrain Worker ---
-  router.add("POST", "/api/admin/workers/:workerId/drain", async (req) => {
+  router.add("POST", "/api/admin/workers/:worker_id/drain", async (req) => {
     const authErr = requireAdminToken(deps, req);
     if (authErr) return authErr;
     const callerToken = extractBearerToken(req.authorization);
     const result = await callToolHandler(
       deps.mcpDeps,
       "admin.worker.drain",
-      { worker_id: req.params.workerId },
+      { worker_id: req.params.worker_id },
       { adminToken: deps.adminToken, callerToken },
     );
     return mcpResultToApi(result);
   });
 
-  router.add("POST", "/api/admin/workers/:workerId/undrain", async (req) => {
+  router.add("POST", "/api/admin/workers/:worker_id/undrain", async (req) => {
     const authErr = requireAdminToken(deps, req);
     if (authErr) return authErr;
     const callerToken = extractBearerToken(req.authorization);
     const result = await callToolHandler(
       deps.mcpDeps,
       "admin.worker.undrain",
-      { worker_id: req.params.workerId },
+      { worker_id: req.params.worker_id },
       { adminToken: deps.adminToken, callerToken },
     );
     return mcpResultToApi(result);
