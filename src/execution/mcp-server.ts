@@ -583,18 +583,22 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
   );
 
   // 4. Check affinity for each entity
+  const flowByIdEarly = new Map(candidateFlows.map((f) => [f.id, f]));
   const affinitySet = new Set<string>();
   const now = Date.now();
   if (workerId) {
     await Promise.all(
       uniqueEntityIds.map(async (eid) => {
+        const entity = entityMap.get(eid);
+        const flow = entity ? flowByIdEarly.get(entity.flowId) : undefined;
+        const windowMs = flow?.affinityWindowMs ?? AFFINITY_WINDOW_MS;
         const invocations = await deps.invocations.findByEntity(eid);
         const lastCompleted = invocations
           .filter((inv) => inv.completedAt !== null && inv.claimedBy === workerId)
           .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
         if (lastCompleted.length > 0) {
           const elapsed = now - (lastCompleted[0].completedAt?.getTime() ?? 0);
-          if (elapsed < AFFINITY_WINDOW_MS) {
+          if (elapsed < windowMs) {
             affinitySet.add(eid);
           }
         }
@@ -638,7 +642,15 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
     if (claimed) {
       const entity = entityMap.get(claimed.entityId);
       if (entity) {
-        const claimedEntity = await deps.entities.claimById(entity.id, workerId ?? `agent:${role}`);
+        let claimedEntity: Awaited<ReturnType<typeof deps.entities.claimById>>;
+        try {
+          claimedEntity = await deps.entities.claimById(entity.id, workerId ?? `agent:${role}`);
+        } catch (err) {
+          log.error(`Failed to claimById for entity ${entity.id}:`, err);
+          // Release the invocation claim so it can be reclaimed rather than orphaned.
+          await deps.invocations.releaseClaim(claimed.id);
+          continue;
+        }
         if (!claimedEntity) {
           // Race condition: another worker claimed this entity first.
           // Release the invocation claim so it can be picked up by another worker.
@@ -650,7 +662,12 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
       // Record affinity for the claiming worker
       if (workerId && entity && flow) {
         const windowMs = flow.affinityWindowMs ?? 300000;
-        await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+        try {
+          await deps.entities.setAffinity(claimed.entityId, workerId, role, new Date(Date.now() + windowMs));
+        } catch (err) {
+          // Affinity is non-critical — log and continue with the successful claim.
+          log.error(`Failed to set affinity for entity ${claimed.entityId} worker ${workerId}:`, err);
+        }
       }
       return jsonResult({
         worker_id: workerId,
@@ -722,14 +739,22 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
     const message = err instanceof Error ? err.message : String(err);
     // processSignal failed after we already completed the invocation — create a
     // replacement so the entity can be reclaimed rather than being permanently orphaned.
-    await deps.invocations.create(
-      entityId,
-      activeInvocation.stage,
-      activeInvocation.prompt,
-      activeInvocation.mode,
-      undefined,
-      activeInvocation.context ?? undefined,
+    // First re-fetch to check whether the engine already created a new invocation
+    // (partial success before the throw) to avoid a duplicate.
+    const currentInvocations = await deps.invocations.findByEntity(entityId);
+    const hasActiveOrUnclaimed = currentInvocations.some(
+      (inv) => inv.completedAt === null && inv.failedAt === null && inv.id !== activeInvocation.id,
     );
+    if (!hasActiveOrUnclaimed) {
+      await deps.invocations.create(
+        entityId,
+        activeInvocation.stage,
+        activeInvocation.prompt,
+        activeInvocation.mode,
+        undefined,
+        activeInvocation.context ?? undefined,
+      );
+    }
     return errorResult(message);
   }
 
@@ -1100,6 +1125,14 @@ async function handleAdminFlowRestore(deps: McpServerDeps, args: Record<string, 
   if (!v.ok) return v.result;
   const flow = await deps.flows.getByName(v.data.flow_name);
   if (!flow) return errorResult(`Flow not found: ${v.data.flow_name}`);
+  // Refuse to restore over a live flow — active invocations mean entities are
+  // currently being processed and restoring the definition would corrupt them.
+  const activeCount = await deps.invocations.countActiveByFlow(flow.id);
+  if (activeCount > 0) {
+    return errorResult(
+      `Cannot restore flow "${v.data.flow_name}": ${activeCount} active invocation(s) in progress. Wait for them to complete before restoring.`,
+    );
+  }
   await deps.flows.snapshot(flow.id);
   await deps.flows.restore(flow.id, v.data.version);
   emitDefinitionChanged(deps.eventRepo, flow.id, "admin.flow.restore", { version: v.data.version });
