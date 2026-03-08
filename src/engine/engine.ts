@@ -73,6 +73,7 @@ export class Engine {
   readonly adapters: Map<string, unknown>;
   private eventEmitter: IEventBusAdapter;
   private readonly logger: Logger;
+  // Drain state is intentionally ephemeral — not persisted to DB. Workers re-register on restart.
   private drainingWorkers = new Set<string>();
 
   constructor(deps: EngineDeps) {
