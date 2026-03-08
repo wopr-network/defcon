@@ -1128,7 +1128,7 @@ describe("flow.claim discipline routing (WOP-1890)", () => {
     expect((result as { isError?: boolean }).isError).toBeUndefined();
   });
 
-  it("returns check_back when entities exist but are all claimed", async () => {
+  it("returns check_back with short retry when entities exist but are all claimed", async () => {
     // Use role "coder" to match the default mockFlow state agentRole
     const flow1 = mockFlow({ id: "flow-1", name: "coder-flow", discipline: null });
     deps.flows.list = async () => [flow1];
@@ -1136,10 +1136,12 @@ describe("flow.claim discipline routing (WOP-1890)", () => {
     deps.invocations.findUnclaimedByFlow = async () => [];
     deps.entities.claim = async () => null; // all entities already claimed
     deps.entities.claimById = async () => null;
+    deps.entities.hasAnyInFlowAndState = async () => true; // entities exist but all claimed
 
     const result = await callClaim({ worker_id: "wkr_test", role: "coder" });
     const data = parseResult(result as { content: Array<{ text: string }> });
     expect(data.next_action).toBe("check_back");
+    expect(data.retry_after_ms).toBe(30000); // short retry: work exists but all busy
   });
 
   it("returns check_back when all entities are in terminal states", async () => {

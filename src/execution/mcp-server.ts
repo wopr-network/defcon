@@ -508,6 +508,7 @@ function errorResult(message: string) {
   };
 }
 
+const RETRY_SHORT_MS = 30_000; // work exists but all entities currently claimed
 const RETRY_LONG_MS = 300_000; // backlog empty
 
 function noWorkResult(retryAfterMs: number, role: string): ReturnType<typeof jsonResult> {
@@ -541,6 +542,9 @@ async function handleFlowClaim(deps: McpServerDeps, args: Record<string, unknown
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return jsonResult({ next_action: "check_back", retry_after_ms: RETRY_LONG_MS, message });
+  }
+  if (result === "all_claimed") {
+    return noWorkResult(RETRY_SHORT_MS, role);
   }
   if (!result) {
     return noWorkResult(RETRY_LONG_MS, role);
