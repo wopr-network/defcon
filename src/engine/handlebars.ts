@@ -34,8 +34,8 @@ hbs.registerHelper("time_in_state", (entity: { updatedAt: string | Date }) =>
   String(Date.now() - new Date(entity.updatedAt).getTime()),
 );
 
-hbs.registerHelper("total_invocations", (entity: { invocations?: unknown[] }) =>
-  String(entity.invocations?.length ?? 0),
+hbs.registerHelper("total_invocations", (entity: { invocations?: { stage: string }[] }) =>
+  String(Array.isArray(entity.invocations) ? entity.invocations.length : 0),
 );
 
 const BUILTIN_HELPERS = new Set([
