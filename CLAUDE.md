@@ -35,3 +35,6 @@ Key concepts that must appear in both method/ and wopr/ docs:
 
 - **Naming**: REST API and `FlowClaimSchema` use `worker_id` (snake_case), never `workerId` (camelCase) — all docs and code must match.
 - **CORS**: `isLoopbackOrigin()` regex must use `https?://` prefix (not just `http://`) to cover both HTTP and SSE/HTTPS transports.
+- **CAS atomicity**: `appendCas` must wrap `getLastSequence` + `insert` in a single `db.transaction()` — separate calls create a TOCTOU race.
+- **CAS events**: `invocation.claim_attempted` fires on every CAS attempt; `entity.claimed` fires only after `claimById` confirms — never reverse this order.
+- **DB error detection**: Check `err.code` (`SQLITE_CONSTRAINT_UNIQUE` / `23505`), not `err.message` — messages vary across drivers and locales.
