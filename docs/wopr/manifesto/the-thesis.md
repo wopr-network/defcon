@@ -73,7 +73,7 @@ NORAD watches everything and touches nothing. It connects to DEFCON via WebSocke
 
 ### SILO — The Payload
 
-[wopr-network/bunker](https://github.com/wopr-network/bunker) *(to be renamed)*
+[wopr-network/silo](https://github.com/wopr-network/silo)
 
 Where the warhead is assembled. The SILO contains:
 
