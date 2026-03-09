@@ -191,7 +191,9 @@ export class Engine {
       try {
         const onExitResult = await executeOnExit(departingStateDef.onExit, entity);
         if (onExitResult.error) {
-          this.logger.warn(`[engine] onExit failed for entity ${entityId} state ${entity.state}: ${onExitResult.error}`);
+          this.logger.warn(
+            `[engine] onExit failed for entity ${entityId} state ${entity.state}: ${onExitResult.error}`,
+          );
           await this.eventEmitter.emit({
             type: "onExit.failed",
             entityId,
