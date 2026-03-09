@@ -1284,10 +1284,11 @@ async function handleAdminEventsList(deps: McpServerDeps, args: Record<string, u
   if (!deps.domainEvents) {
     return errorResult("Domain events repository not available");
   }
-  const parsed = AdminEventsListSchema.parse(args);
-  const events = await deps.domainEvents.list(parsed.entity_id, {
-    type: parsed.type,
-    limit: parsed.limit,
+  const parsed = validateInput(AdminEventsListSchema, args);
+  if (!parsed.ok) return parsed.result;
+  const events = await deps.domainEvents.list(parsed.data.entity_id, {
+    type: parsed.data.type,
+    limit: parsed.data.limit,
   });
   return { content: [{ type: "text" as const, text: JSON.stringify(events, null, 2) }] };
 }

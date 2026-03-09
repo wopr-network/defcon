@@ -208,7 +208,7 @@ export const domainEvents = sqliteTable(
     emittedAt: integer("emitted_at").notNull(),
   },
   (table) => ({
-    entitySeqIdx: index("domain_events_entity_seq_idx").on(table.entityId, table.sequence),
+    entitySeqIdx: uniqueIndex("domain_events_entity_seq_idx").on(table.entityId, table.sequence),
     typeIdx: index("domain_events_type_idx").on(table.type, table.emittedAt),
   }),
 );

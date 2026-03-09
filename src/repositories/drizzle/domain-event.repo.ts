@@ -11,18 +11,20 @@ export class DrizzleDomainEventRepository implements IDomainEventRepository {
   constructor(private readonly db: Db) {}
 
   async append(type: string, entityId: string, payload: Record<string, unknown>): Promise<DomainEvent> {
-    const maxRow = this.db
-      .select({ maxSeq: sql<number>`coalesce(max(${domainEvents.sequence}), 0)` })
-      .from(domainEvents)
-      .where(eq(domainEvents.entityId, entityId))
-      .get();
-    const sequence = (maxRow?.maxSeq ?? 0) + 1;
-    const id = randomUUID();
-    const emittedAt = Date.now();
+    return this.db.transaction((tx) => {
+      const maxRow = tx
+        .select({ maxSeq: sql<number>`coalesce(max(${domainEvents.sequence}), 0)` })
+        .from(domainEvents)
+        .where(eq(domainEvents.entityId, entityId))
+        .get();
+      const sequence = (maxRow?.maxSeq ?? 0) + 1;
+      const id = randomUUID();
+      const emittedAt = Date.now();
 
-    this.db.insert(domainEvents).values({ id, type, entityId, payload, sequence, emittedAt }).run();
+      tx.insert(domainEvents).values({ id, type, entityId, payload, sequence, emittedAt }).run();
 
-    return { id, type, entityId, payload, sequence, emittedAt };
+      return { id, type, entityId, payload, sequence, emittedAt };
+    });
   }
 
   async list(entityId: string, opts?: { type?: string; limit?: number }): Promise<DomainEvent[]> {
