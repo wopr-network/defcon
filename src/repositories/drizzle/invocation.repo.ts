@@ -47,7 +47,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
         id,
         entityId,
         stage,
-        agentRole: agentRole ?? null,
+        agentRole: agentRole || null,
         prompt,
         mode,
         ttlMs: ttlMs ?? 1800000,
