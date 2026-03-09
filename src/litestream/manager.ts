@@ -1,4 +1,4 @@
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -50,17 +50,16 @@ export class LitestreamManager {
   }
 
   generateConfig(): string {
-    const endpoint = this.config.endpoint ? `        endpoint: ${this.config.endpoint}\n` : "";
+    const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+    const endpoint = this.config.endpoint ? `        endpoint: ${q(this.config.endpoint)}\n` : "";
     return `dbs:
-  - path: ${this.config.dbPath}
+  - path: ${q(this.config.dbPath)}
     replicas:
       - type: s3
-        url: ${this.config.replicaUrl}
-        access-key-id: ${this.config.accessKeyId}
-        secret-access-key: ${this.config.secretAccessKey}
-${endpoint}        region: ${this.config.region}
-        retention: ${this.config.retention}
-        sync-interval: ${this.config.syncInterval}
+        url: ${q(this.config.replicaUrl)}
+${endpoint}        region: ${q(this.config.region)}
+        retention: ${q(this.config.retention)}
+        sync-interval: ${q(this.config.syncInterval)}
 `;
   }
 
@@ -75,19 +74,24 @@ ${endpoint}        region: ${this.config.region}
     }
     this.writeConfig();
     process.stderr.write(`[litestream] Restoring from ${this.config.replicaUrl}...\n`);
-    try {
-      execSync(`litestream restore -config ${this.configPath} ${this.config.dbPath}`, {
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 120_000,
-      });
-      process.stderr.write(`[litestream] Restore complete\n`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("no generations found")) {
+    const result = spawnSync("litestream", ["restore", "-config", this.configPath, this.config.dbPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        LITESTREAM_ACCESS_KEY_ID: this.config.accessKeyId,
+        LITESTREAM_SECRET_ACCESS_KEY: this.config.secretAccessKey,
+      },
+    });
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() ?? "";
+      if (stderr.includes("no generations found")) {
         process.stderr.write(`[litestream] No replica found, starting fresh\n`);
       } else {
-        process.stderr.write(`[litestream] Restore failed: ${msg}\n`);
+        throw new Error(`[litestream] Restore failed: ${stderr}`);
       }
+    } else {
+      process.stderr.write(`[litestream] Restore complete\n`);
     }
   }
 
@@ -96,6 +100,11 @@ ${endpoint}        region: ${this.config.region}
     process.stderr.write(`[litestream] Starting replication to ${this.config.replicaUrl}\n`);
     this.child = spawn("litestream", ["replicate", "-config", this.configPath], {
       stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        LITESTREAM_ACCESS_KEY_ID: this.config.accessKeyId,
+        LITESTREAM_SECRET_ACCESS_KEY: this.config.secretAccessKey,
+      },
     });
     this.child.stdout?.on("data", (chunk: Buffer) => {
       process.stderr.write(`[litestream] ${chunk.toString()}`);
@@ -107,14 +116,25 @@ ${endpoint}        region: ${this.config.region}
       process.stderr.write(`[litestream] Process exited with code ${code}\n`);
       this.child = null;
     });
+    this.child.on("error", (err) => {
+      process.stderr.write(`[litestream] Process error: ${err.message}\n`);
+      this.child = null;
+    });
   }
 
-  close(): void {
-    if (this.child) {
-      process.stderr.write(`[litestream] Stopping replication\n`);
-      this.child.kill("SIGTERM");
-      this.child = null;
+  close(): Promise<void> {
+    if (!this.child) {
+      return Promise.resolve();
     }
+    const child = this.child;
+    return new Promise((resolve) => {
+      process.stderr.write(`[litestream] Stopping replication\n`);
+      child.once("exit", () => {
+        this.child = null;
+        resolve();
+      });
+      child.kill("SIGTERM");
+    });
   }
 
   private writeConfig(): void {
