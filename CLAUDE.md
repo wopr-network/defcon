@@ -38,3 +38,6 @@ Key concepts that must appear in both method/ and wopr/ docs:
 - **CAS atomicity**: `appendCas` must wrap `getLastSequence` + `insert` in a single `db.transaction()` — separate calls create a TOCTOU race.
 - **CAS events**: `invocation.claim_attempted` fires on every CAS attempt; `entity.claimed` fires only after `claimById` confirms — never reverse this order.
 - **DB error detection**: Check `err.code` (`SQLITE_CONSTRAINT_UNIQUE` / `23505`), not `err.message` — messages vary across drivers and locales.
+- **Event uniqueness**: `domain_events.(entityId, sequence)` must be a `uniqueIndex`, not a plain index — enforces append-only invariant at the DB level.
+- **Snapshot replay**: Snapshot save failures must be non-fatal (try/catch) — replay from events is the fallback; never let a cache failure break the read path.
+- **Event filtering**: `EventSourcedEntityRepository.get()` must filter events at DB level (e.g., `WHERE sequence >= minSequence`), not load all events and filter in memory.
