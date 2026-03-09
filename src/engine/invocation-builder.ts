@@ -69,7 +69,7 @@ export async function buildInvocation(
   let userContent = "";
 
   if (state.promptTemplate) {
-    const template = getHandlebars().compile(state.promptTemplate);
+    const template = getHandlebars().compile(state.promptTemplate, { noEscape: true });
     prompt = template(context);
 
     systemPrompt = `${INJECTION_WARNING}\n\n${prompt}`;
