@@ -141,7 +141,7 @@ describe("Engine CAS claim", () => {
 
     const casEvent: DomainEvent = {
       id: "de-1",
-      type: "invocation.claimed",
+      type: "invocation.claim_attempted",
       entityId: "ent-1",
       payload: {},
       sequence: 4,
@@ -181,7 +181,7 @@ describe("Engine CAS claim", () => {
     expect(result).not.toBe("all_claimed");
     expect(domainEventRepo.getLastSequence).toHaveBeenCalledWith("ent-1");
     expect(domainEventRepo.appendCas).toHaveBeenCalledWith(
-      "invocation.claimed",
+      "invocation.claim_attempted",
       "ent-1",
       expect.objectContaining({ agentId: "agent:engineering" }),
       3,

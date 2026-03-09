@@ -643,7 +643,7 @@ export class Engine {
       if (this.domainEventRepo) {
         const lastSeq = await this.domainEventRepo.getLastSequence(entity.id);
         const casResult = await this.domainEventRepo.appendCas(
-          "invocation.claimed",
+          "invocation.claim_attempted",
           entity.id,
           { agentId: entityClaimToken, invocationId: pending.id, stage: pending.stage },
           lastSeq,
@@ -660,8 +660,8 @@ export class Engine {
               agentId: entityClaimToken,
               reason: "claimById_failed",
             });
-          } catch (_) {
-            // best-effort rollback event
+          } catch (err) {
+            this.logger.warn("[engine] CAS claim rollback event failed", { err });
           }
         }
         continue;

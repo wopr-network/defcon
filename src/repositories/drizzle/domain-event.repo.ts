@@ -42,14 +42,30 @@ export class DrizzleDomainEventRepository implements IDomainEventRepository {
     payload: Record<string, unknown>,
     expectedSequence: number,
   ): Promise<DomainEvent | null> {
-    const newSequence = expectedSequence + 1;
-    const id = randomUUID();
-    const emittedAt = Date.now();
     try {
-      this.db.insert(domainEvents).values({ id, type, entityId, payload, sequence: newSequence, emittedAt }).run();
-      return { id, type, entityId, payload, sequence: newSequence, emittedAt };
+      return this.db.transaction((tx) => {
+        const currentRow = tx
+          .select({ maxSeq: sql<number>`coalesce(max(${domainEvents.sequence}), 0)` })
+          .from(domainEvents)
+          .where(eq(domainEvents.entityId, entityId))
+          .get();
+        const currentSeq = currentRow?.maxSeq ?? 0;
+        if (currentSeq !== expectedSequence) {
+          return null;
+        }
+        const newSequence = expectedSequence + 1;
+        const id = randomUUID();
+        const emittedAt = Date.now();
+        tx.insert(domainEvents).values({ id, type, entityId, payload, sequence: newSequence, emittedAt }).run();
+        return { id, type, entityId, payload, sequence: newSequence, emittedAt };
+      });
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
+      if (
+        err instanceof Error &&
+        (("code" in err && (err as NodeJS.ErrnoException).code === "SQLITE_CONSTRAINT_UNIQUE") ||
+          ("code" in err && (err as NodeJS.ErrnoException).code === "23505") ||
+          err.message.includes("UNIQUE constraint failed"))
+      ) {
         return null;
       }
       throw err;
