@@ -293,6 +293,7 @@ export async function handleFlowReport(deps: McpServerDeps, args: Record<string,
         activeInvocation.mode,
         undefined,
         activeInvocation.context ?? undefined,
+        activeInvocation.agentRole,
       );
     }
     return errorResult(message);
@@ -327,6 +328,7 @@ export async function handleFlowReport(deps: McpServerDeps, args: Record<string,
       activeInvocation.mode,
       undefined,
       activeInvocation.context ?? undefined,
+      activeInvocation.agentRole,
     );
     const claimedBy = activeInvocation.claimedBy;
     if (claimedBy) {

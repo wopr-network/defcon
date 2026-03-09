@@ -146,6 +146,7 @@ export class ActiveRunner {
         invocation.mode,
         undefined,
         { ...(invocation.context ?? {}), retryCount: retryCount + 1 },
+        invocation.agentRole,
       );
       return;
     }
@@ -165,6 +166,7 @@ export class ActiveRunner {
         invocation.mode,
         undefined,
         invocation.context ?? undefined,
+        invocation.agentRole,
       );
       await sleep(retryAfterMs, signal);
       return;

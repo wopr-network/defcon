@@ -654,6 +654,7 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
           activeInvocation.mode,
           undefined,
           activeInvocation.context ?? undefined,
+          activeInvocation.agentRole,
         );
         // Claim the replacement for the same worker so it can retry immediately.
         if (worker_id && replacement) {
@@ -695,6 +696,7 @@ async function handleFlowReport(deps: McpServerDeps, args: Record<string, unknow
       activeInvocation.mode,
       undefined,
       activeInvocation.context ?? undefined,
+      activeInvocation.agentRole,
     );
 
     if (result.gateTimedOut) {

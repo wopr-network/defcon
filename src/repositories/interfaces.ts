@@ -325,9 +325,9 @@ export interface IInvocationRepository {
     stage: string,
     prompt: string,
     mode: Mode,
-    ttlMs?: number,
-    context?: Record<string, unknown>,
-    agentRole?: string | null,
+    ttlMs: number | undefined,
+    context: Record<string, unknown> | undefined,
+    agentRole: string | null,
   ): Promise<Invocation>;
 
   /** Get an invocation by ID, or null if not found. */

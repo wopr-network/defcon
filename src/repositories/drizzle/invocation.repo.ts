@@ -36,9 +36,9 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     stage: string,
     prompt: string,
     mode: Mode,
-    ttlMs?: number,
-    context?: Record<string, unknown>,
-    agentRole?: string | null,
+    ttlMs: number | undefined,
+    context: Record<string, unknown> | undefined,
+    agentRole: string | null,
   ): Promise<Invocation> {
     const id = crypto.randomUUID();
     this.db
