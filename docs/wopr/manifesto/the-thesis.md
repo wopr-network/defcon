@@ -59,7 +59,7 @@ Each discipline gets its own Dockerfile with project-specific tooling. The coder
 
 Nukes are expensive. Each one costs tokens — $0.03 to $0.50 depending on model tier and context size. You want as few as possible hitting the target. This is why gates exist: every gate that routes an entity without launching a nuke saves money. The merge-queue gate that checks PR state is a $0.00 shell script making a decision that would cost $0.03 if an agent did it.
 
-Nukes are observable. RADAR tracks every one in flight — when it launched, what it's working on, how long it's been running. Every SSE event from the nuke is recorded in the activity repo: tool calls, text output, results, costs. NORAD displays them in real time. If a nuke hangs, RADAR reaps it after a timeout.
+Nukes are observable. RADAR tracks every one in flight — when it launched, what it's working on, how long it's been running. Every SSE event from the nuke is recorded in RADAR's activity store: tool calls, text output, results, costs. NORAD displays them in real time. If a nuke hangs, RADAR reaps it after a timeout.
 
 Nukes are ephemeral. They launch, do one job, emit a signal, and die. No accumulated state. No memory between invocations. Everything they produce goes into an external system: a git commit, a Linear comment, a PR review.
 
