@@ -459,7 +459,6 @@ export interface IDomainEventRepository {
   ): Promise<DomainEvent | null>;
 }
 
-
 /** Data-access contract for entity state snapshots (event-sourcing optimization). */
 export interface IEntitySnapshotRepository {
   /** Save a snapshot of entity state at a given event sequence number. Ignores duplicates. */
