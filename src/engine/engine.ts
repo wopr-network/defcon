@@ -24,6 +24,10 @@ import { executeOnEnter } from "./on-enter.js";
 import { executeOnExit } from "./on-exit.js";
 import { findTransition, isTerminal } from "./state-machine.js";
 
+const MERGE_BLOCKED_THRESHOLD = 3;
+const MERGE_BLOCKED_STUCK_MESSAGE =
+  "PR blocked in merge queue 3+ times — likely branch protection or queue contention issue";
+
 export interface ProcessSignalResult {
   newState?: string;
   /** Names (not IDs) of gates that evaluated and passed during this transition. */
@@ -189,10 +193,35 @@ export class Engine {
     }
 
     // Gate passed or redirected — determine the actual destination.
-    const toState = routing.kind === "redirect" ? routing.toState : transition.toState;
+    let toState = routing.kind === "redirect" ? routing.toState : transition.toState;
     const trigger = routing.kind === "redirect" ? routing.trigger : signal;
     const spawnFlow = routing.kind === "redirect" ? null : transition.spawnFlow;
     const { gatesPassed } = routing;
+
+    // 4a. Merge-blocked loop detection: if the watcher sends "blocked" from
+    // "merging", increment a counter. After MERGE_BLOCKED_THRESHOLD cycles,
+    // override the destination to "stuck" to break the loop.
+    if (signal === "blocked" && entity.state === "merging") {
+      const prevCount = (
+        typeof entity.artifacts?.merge_blocked_count === "number" ? entity.artifacts.merge_blocked_count : 0
+      ) as number;
+      const newCount = prevCount + 1;
+      await this.entityRepo.updateArtifacts(entityId, { merge_blocked_count: newCount });
+      if (newCount >= MERGE_BLOCKED_THRESHOLD) {
+        const stuckState = flow.states.find((s) => s.name === "stuck");
+        if (stuckState) {
+          toState = "stuck";
+          await this.entityRepo.updateArtifacts(entityId, {
+            merge_blocked_message: MERGE_BLOCKED_STUCK_MESSAGE,
+          });
+          this.logger.warn(`[engine] Entity ${entityId} merge-blocked ${newCount} times, transitioning to stuck`);
+        } else {
+          this.logger.warn(
+            `merge_blocked_count >= threshold but no stuck state in flow ${flow.name} — entity ${entityId} will continue looping`,
+          );
+        }
+      }
+    }
 
     // 4b. Execute onExit hook on the DEPARTING state (before transition)
     const departingStateDef = flow.states.find((s) => s.name === entity.state);

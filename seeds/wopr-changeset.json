@@ -56,7 +56,7 @@
       "flowName": "wopr-changeset",
       "mode": "passive",
       "constraints": {
-        "description": "Issue has been flagged 3+ times for the same finding. Requires human intervention."
+        "description": "Issue has been flagged 3+ times for the same finding, or PR blocked in merge queue 3+ times. Requires human intervention."
       }
     },
     {
