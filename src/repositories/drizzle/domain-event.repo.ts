@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { DomainEvent, IDomainEventRepository } from "../interfaces.js";
 import type * as schema from "./schema.js";
@@ -72,10 +72,13 @@ export class DrizzleDomainEventRepository implements IDomainEventRepository {
     }
   }
 
-  async list(entityId: string, opts?: { type?: string; limit?: number }): Promise<DomainEvent[]> {
+  async list(entityId: string, opts?: { type?: string; limit?: number; minSequence?: number }): Promise<DomainEvent[]> {
     const conditions = [eq(domainEvents.entityId, entityId)];
     if (opts?.type) {
       conditions.push(eq(domainEvents.type, opts.type));
+    }
+    if (opts?.minSequence !== undefined) {
+      conditions.push(gt(domainEvents.sequence, opts.minSequence));
     }
 
     const rows = this.db

@@ -235,6 +235,7 @@ export const entitySnapshots = sqliteTable(
     createdAt: integer("created_at"),
     updatedAt: integer("updated_at"),
     snapshotAt: integer("snapshot_at").notNull(),
+    parentEntityId: text("parent_entity_id"),
   },
   (table) => ({
     entitySeqUnique: uniqueIndex("entity_snapshots_entity_seq_idx").on(table.entityId, table.sequence),

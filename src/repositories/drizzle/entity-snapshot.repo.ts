@@ -32,6 +32,7 @@ export class DrizzleEntitySnapshotRepository implements IEntitySnapshotRepositor
         createdAt: state.createdAt.getTime(),
         updatedAt: state.updatedAt.getTime(),
         snapshotAt: Date.now(),
+        parentEntityId: state.parentEntityId,
       })
       .onConflictDoNothing()
       .run();
@@ -66,7 +67,7 @@ export class DrizzleEntitySnapshotRepository implements IEntitySnapshotRepositor
         affinityWorkerId: row.affinityWorkerId ?? null,
         affinityRole: row.affinityRole ?? null,
         affinityExpiresAt: row.affinityExpiresAt ? new Date(row.affinityExpiresAt) : null,
-        parentEntityId: null,
+        parentEntityId: row.parentEntityId ?? null,
       },
     };
   }

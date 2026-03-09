@@ -30,13 +30,12 @@ export class EventSourcedEntityRepository implements IEntityRepository {
     const snapshot = await this.snapshots.loadLatest(id);
     const afterSeq = snapshot?.sequence ?? 0;
 
-    const events = await this.domainEvents.list(id, { limit: 10000 });
+    const eventsAfterSnapshot = await this.domainEvents.list(id, { minSequence: afterSeq, limit: 10000 });
 
-    if (events.length === 0) {
+    if (eventsAfterSnapshot.length === 0 && !snapshot) {
       return this.mutable.get(id);
     }
 
-    const eventsAfterSnapshot = events.filter((e) => e.sequence > afterSeq);
     const entity = replayEntity(snapshot?.state ?? null, eventsAfterSnapshot, id);
 
     if (!entity) {

@@ -444,7 +444,7 @@ export interface IDomainEventRepository {
   append(type: string, entityId: string, payload: Record<string, unknown>): Promise<DomainEvent>;
 
   /** List domain events for an entity, optionally filtered by type, ordered by sequence ascending. */
-  list(entityId: string, opts?: { type?: string; limit?: number }): Promise<DomainEvent[]>;
+  list(entityId: string, opts?: { type?: string; limit?: number; minSequence?: number }): Promise<DomainEvent[]>;
 
   /** Get the current max sequence number for an entity (0 if no events exist). */
   getLastSequence(entityId: string): Promise<number>;
@@ -459,16 +459,6 @@ export interface IDomainEventRepository {
   ): Promise<DomainEvent | null>;
 }
 
-/** A persisted domain event from the append-only audit log. */
-export interface DomainEvent {
-  id: string;
-  type: string;
-  entityId: string;
-  payload: Record<string, unknown>;
-  sequence: number;
-  emittedAt: number;
-}
-
 /** Data-access contract for entity state snapshots (event-sourcing optimization). */
 export interface IEntitySnapshotRepository {
   /** Save a snapshot of entity state at a given event sequence number. Ignores duplicates. */
@@ -476,15 +466,6 @@ export interface IEntitySnapshotRepository {
 
   /** Load the latest snapshot for an entity. Returns null if none exists. */
   loadLatest(entityId: string): Promise<{ sequence: number; state: Entity } | null>;
-}
-
-/** Data-access contract for the append-only domain_events table. */
-export interface IDomainEventRepository {
-  /** Append a domain event. Sequence is computed as max(sequence)+1 for the entity. */
-  append(type: string, entityId: string, payload: Record<string, unknown>): Promise<DomainEvent>;
-
-  /** List domain events for an entity, optionally filtered by type, ordered by sequence ascending. */
-  list(entityId: string, opts?: { type?: string; limit?: number }): Promise<DomainEvent[]>;
 }
 
 /** Data-access contract for gate definitions and result recording. */
