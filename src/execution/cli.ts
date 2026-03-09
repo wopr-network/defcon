@@ -33,6 +33,7 @@ import {
   transitionRules,
 } from "../repositories/drizzle/schema.js";
 import { DrizzleTransitionLogRepository } from "../repositories/drizzle/transition-log.repo.js";
+import { UiSseAdapter } from "../ui/sse.js";
 import { WebSocketBroadcaster } from "../ws/broadcast.js";
 import type { McpServerDeps, McpServerOpts } from "./mcp-server.js";
 import { createMcpServer, startStdioServer } from "./mcp-server.js";
@@ -190,6 +191,7 @@ program
   .option("--mcp-only", "Start MCP stdio only (no HTTP REST server)")
   .option("--http-port <number>", "Port for HTTP REST API", "3000")
   .option("--http-host <address>", "Host for HTTP REST API", "127.0.0.1")
+  .option("--ui", "Enable built-in web UI at /ui")
   .action(async (opts) => {
     const { db, sqlite } = openDb(opts.db);
     const entityRepo = new DrizzleEntityRepository(db);
@@ -254,6 +256,10 @@ program
     const startHttp = !opts.mcpOnly;
     const startMcp = !opts.httpOnly;
 
+    if (opts.mcpOnly && opts.ui) {
+      console.warn("Warning: --ui is ignored when --mcp-only is set (HTTP server is disabled)");
+    }
+
     try {
       validateAdminToken({ adminToken, startHttp, transport: opts.transport });
     } catch (err: unknown) {
@@ -285,13 +291,19 @@ program
         sqlite.close();
         process.exit(1);
       }
+      const uiSseAdapter = opts.ui ? new UiSseAdapter() : undefined;
       restHttpServer = createHttpServer({
         engine,
         mcpDeps: deps,
         adminToken,
         workerToken,
         corsOrigins: restCorsResult.origins ?? undefined,
+        enableUi: !!opts.ui,
+        uiSseAdapter,
       });
+      if (uiSseAdapter) {
+        eventEmitter.register(uiSseAdapter);
+      }
       if (adminToken) {
         const wsBroadcaster = new WebSocketBroadcaster({
           server: restHttpServer,
