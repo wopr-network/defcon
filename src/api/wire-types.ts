@@ -15,6 +15,7 @@ export type ClaimResponse =
       invocation_id: string;
       flow: string | null;
       stage: string;
+      agent_role: string | null;
       prompt: string;
       context: Record<string, unknown> | null;
       worker_notice?: string;

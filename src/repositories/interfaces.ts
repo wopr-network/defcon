@@ -39,6 +39,7 @@ export interface Invocation {
   id: string;
   entityId: string;
   stage: string;
+  agentRole: string | null;
   mode: Mode;
   prompt: string;
   context: Record<string, unknown> | null;
@@ -89,6 +90,8 @@ export interface State {
   id: string;
   flowId: string;
   name: string;
+  /** Agent type identifier — maps to an agent MD file (e.g. "wopr-architect" → ~/.claude/agents/wopr-architect.md). */
+  agentRole: string | null;
   modelTier: string | null;
   mode: Mode;
   promptTemplate: string | null;
@@ -183,6 +186,7 @@ export interface CreateFlowInput {
 /** Input for adding a state to a flow */
 export interface CreateStateInput {
   name: string;
+  agentRole?: string;
   modelTier?: string;
   mode?: Mode;
   promptTemplate?: string;
@@ -323,6 +327,7 @@ export interface IInvocationRepository {
     mode: Mode,
     ttlMs?: number,
     context?: Record<string, unknown>,
+    agentRole?: string | null,
   ): Promise<Invocation>;
 
   /** Get an invocation by ID, or null if not found. */

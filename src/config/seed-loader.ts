@@ -121,6 +121,7 @@ async function parseSeedAndLoad(
       for (const s of flowStates) {
         await flowRepo.addState(flow.id, {
           name: s.name,
+          agentRole: s.agentRole,
           modelTier: s.modelTier,
           mode: s.mode,
           promptTemplate: s.promptTemplate,

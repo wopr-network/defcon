@@ -12,6 +12,7 @@ function toInvocation(row: typeof invocations.$inferSelect): Invocation {
     id: row.id,
     entityId: row.entityId,
     stage: row.stage,
+    agentRole: row.agentRole ?? null,
     mode: row.mode as Mode,
     prompt: row.prompt,
     context: row.context as Record<string, unknown> | null,
@@ -37,6 +38,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
     mode: Mode,
     ttlMs?: number,
     context?: Record<string, unknown>,
+    agentRole?: string | null,
   ): Promise<Invocation> {
     const id = crypto.randomUUID();
     this.db
@@ -45,6 +47,7 @@ export class DrizzleInvocationRepository implements IInvocationRepository {
         id,
         entityId,
         stage,
+        agentRole: agentRole ?? null,
         prompt,
         mode,
         ttlMs: ttlMs ?? 1800000,

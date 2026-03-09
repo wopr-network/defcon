@@ -41,6 +41,7 @@ export const OnEnterSchema = z.object({
 export const StateDefinitionSchema = z.object({
   name: z.string().min(1),
   flowName: z.string().min(1),
+  agentRole: z.string().optional(),
   modelTier: z.string().optional(),
   mode: z.enum(["passive", "active"]).optional().default("passive"),
   promptTemplate: z

@@ -295,6 +295,7 @@ export class Engine {
           build.systemPrompt || build.userContent
             ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
             : undefined,
+          newStateDef.agentRole ?? null,
         );
         result.invocationId = invocation.id;
         await this.eventEmitter.emit({
@@ -413,6 +414,7 @@ export class Engine {
         build.systemPrompt || build.userContent
           ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
           : undefined,
+        initialState.agentRole ?? null,
       );
     }
 
@@ -607,6 +609,7 @@ export class Engine {
           build.systemPrompt || build.userContent
             ? { systemPrompt: build.systemPrompt, userContent: build.userContent }
             : undefined,
+          state.agentRole ?? null,
         );
 
         const entityClaimToken = worker_id ?? `agent:${role}`;
