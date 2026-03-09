@@ -147,6 +147,29 @@ describe("entity cancellation", () => {
     expect(parsed.state).toBe("cancelled");
   });
 
+  it("cascade visits children of already-cancelled nodes", async () => {
+    const parentFlow = await createFlow("parent-flow", ["open", "done"]);
+    const childFlow = await createFlow("child-flow", ["open", "done"]);
+
+    const parent = await entityRepo.create(parentFlow.id, "open");
+    const child = await entityRepo.create(childFlow.id, "open", undefined, undefined, parent.id);
+    const grandchild = await entityRepo.create(childFlow.id, "open", undefined, undefined, child.id);
+
+    // Pre-cancel the child so it's already cancelled before cascade runs
+    await callToolHandler(deps, "admin.entity.cancel", { entity_id: child.id });
+
+    // Now cascade-cancel the parent — grandchild must still be cancelled
+    const result = await callToolHandler(deps, "admin.entity.cancel", {
+      entity_id: parent.id,
+      cascade: true,
+    });
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.cancelled).toBe(true);
+
+    const grandchildCheck = await entityRepo.get(grandchild.id);
+    expect(grandchildCheck!.state).toBe("cancelled");
+  });
+
   it("parent_entity_id is set on spawned child entities", async () => {
     const parentFlow = await createFlow("parent-flow", ["open", "done"]);
     const childFlow = await createFlow("child-flow", ["open", "done"]);

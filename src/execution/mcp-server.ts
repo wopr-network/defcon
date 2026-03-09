@@ -55,6 +55,7 @@ export interface McpServerDeps {
   eventRepo: IEventRepository;
   engine?: Engine;
   logger?: Logger;
+  withTransaction?: <T>(fn: () => T | Promise<T>) => Promise<T>;
 }
 
 export interface McpServerOpts {
@@ -898,52 +899,66 @@ async function handleAdminEntityCancel(deps: McpServerDeps, args: Record<string,
   if (entity.state === "cancelled") return errorResult(`Entity ${entity_id} is already cancelled`);
 
   const cancelled: string[] = [];
+  const MAX_CANCEL_DEPTH = 100;
 
-  async function cancelOne(eid: string): Promise<void> {
-    const e = eid === entity_id ? entity : await deps.entities.get(eid);
-    if (!e || e.state === "cancelled") return;
+  async function cancelOne(eid: string, depth: number): Promise<void> {
+    if (depth > MAX_CANCEL_DEPTH) {
+      throw new Error(
+        `cancelOne exceeded maximum recursion depth of ${MAX_CANCEL_DEPTH} — possible cycle or pathologically deep entity tree`,
+      );
+    }
 
-    const invocations = await deps.invocations.findByEntity(eid);
-    for (const inv of invocations) {
-      if (inv.completedAt === null && inv.failedAt === null) {
-        await deps.invocations.fail(inv.id, reason ?? "Cancelled by admin");
+    const e = await deps.entities.get(eid);
+    const alreadyCancelled = !e || e.state === "cancelled";
+
+    if (!alreadyCancelled) {
+      const invocations = await deps.invocations.findByEntity(eid);
+      for (const inv of invocations) {
+        if (inv.completedAt === null && inv.failedAt === null) {
+          await deps.invocations.fail(inv.id, reason ?? "Cancelled by admin");
+        }
       }
-    }
 
-    await deps.entities.cancelEntity(eid);
+      await deps.entities.cancelEntity(eid);
 
-    await deps.transitions.record({
-      entityId: eid,
-      fromState: e.state,
-      toState: "cancelled",
-      trigger: "admin.cancel",
-      invocationId: null,
-      timestamp: new Date(),
-    });
-
-    if (deps.engine) {
-      await deps.engine.emit({
-        type: "entity.cancelled",
+      await deps.transitions.record({
         entityId: eid,
-        flowId: e.flowId,
-        cancelledBy: "admin",
-        reason: reason ?? null,
-        cascade: cascade ?? false,
-        emittedAt: new Date(),
+        fromState: e.state,
+        toState: "cancelled",
+        trigger: "admin.cancel",
+        invocationId: null,
+        timestamp: new Date(),
       });
-    }
 
-    cancelled.push(eid);
+      if (deps.engine) {
+        await deps.engine.emit({
+          type: "entity.cancelled",
+          entityId: eid,
+          flowId: e.flowId,
+          cancelledBy: "admin",
+          reason: reason ?? null,
+          cascade: cascade ?? false,
+          emittedAt: new Date(),
+        });
+      }
+
+      cancelled.push(eid);
+    }
 
     if (cascade) {
       const children = await deps.entities.findByParentId(eid);
       for (const child of children) {
-        await cancelOne(child.id);
+        await cancelOne(child.id, depth + 1);
       }
     }
   }
 
-  await cancelOne(entity_id);
+  const run = () => cancelOne(entity_id, 0);
+  if (deps.withTransaction) {
+    await deps.withTransaction(run);
+  } else {
+    await run();
+  }
 
   return jsonResult({ cancelled: true, entity_id, cancelled_count: cancelled.length, cancelled_ids: cancelled });
 }
