@@ -7,7 +7,8 @@ export interface ParsedRequest {
 
 export interface ApiResponse {
   status: number;
-  body: unknown;
+  body?: unknown;
+  html?: string;
 }
 
 type Handler = (req: ParsedRequest) => Promise<ApiResponse>;

@@ -341,17 +341,20 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
 
   // --- UI routes (optional, enabled via enableUi) ---
   if (deps.enableUi) {
-    router.add("GET", "/ui", async (req) => {
-      const authErr = requireAdminToken(deps, req);
-      if (authErr) return authErr;
-      return { status: 200, body: "__HTML__" as unknown as Record<string, unknown> };
+    router.add("GET", "/ui", async () => {
+      // No auth here: browsers navigating to /ui can't send Authorization headers.
+      // Auth is handled in the browser (token prompt) and enforced on API calls.
+      return { status: 200, html: "UI" };
     });
 
     router.add("GET", "/api/ui/entity/:id/events", async (req) => {
       const authErr = requireAdminToken(deps, req);
       if (authErr) return authErr;
       const limitStr = req.query.get("limit");
-      const limit = limitStr ? parseInt(limitStr, 10) : 100;
+      const limit = limitStr !== null ? parseInt(limitStr, 10) : 100;
+      if (limitStr !== null && (!Number.isFinite(limit) || limit <= 0)) {
+        return { status: 400, body: { error: "invalid limit parameter" } };
+      }
       const evts = await deps.mcpDeps.eventRepo.findByEntity(req.params.id, limit);
       return { status: 200, body: evts as unknown as Record<string, unknown> };
     });
@@ -374,7 +377,10 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
       const authErr = requireAdminToken(deps, req);
       if (authErr) return authErr;
       const limitStr = req.query.get("limit");
-      const limit = limitStr ? parseInt(limitStr, 10) : 200;
+      const limit = limitStr !== null ? parseInt(limitStr, 10) : 200;
+      if (limitStr !== null && (!Number.isFinite(limit) || limit <= 0)) {
+        return { status: 400, body: { error: "invalid limit parameter" } };
+      }
       const evts = await deps.mcpDeps.eventRepo.findRecent(limit);
       return { status: 200, body: evts as unknown as Record<string, unknown> };
     });
@@ -479,7 +485,7 @@ export function createHttpServer(deps: HttpServerDeps): http.Server {
       const apiRes = await match.handler(parsed);
       if (apiRes.status === 204) {
         res.writeHead(204).end();
-      } else if (apiRes.body === "__HTML__") {
+      } else if (apiRes.html !== undefined) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(UI_HTML);
       } else {

@@ -142,7 +142,7 @@ function doLogin() {
   const v = document.getElementById('token-input').value.trim();
   if (!v) { showAuthError('Token required'); return; }
   TOKEN = v;
-  localStorage.setItem('defcon-token', v);
+  sessionStorage.setItem('defcon-token', v);
   verifyToken();
 }
 
@@ -153,7 +153,7 @@ function showAuthError(msg) {
 }
 
 function verifyToken() {
-  fetch('/api/status', { headers: { Authorization: 'Bearer ' + TOKEN } })
+  fetch('/api/ui/events/recent?limit=1', { headers: { Authorization: 'Bearer ' + TOKEN } })
     .then(r => {
       if (r.ok) {
         document.getElementById('auth-overlay').style.display = 'none';
@@ -161,7 +161,7 @@ function verifyToken() {
       } else {
         showAuthError('Invalid token');
         TOKEN = '';
-        localStorage.removeItem('defcon-token');
+        sessionStorage.removeItem('defcon-token');
       }
     })
     .catch(() => showAuthError('Connection failed'));
@@ -387,17 +387,17 @@ function renderEventLog() {
   const el = document.getElementById('event-log-container');
   const filtered = filter ? allEvents.filter(e => e.type === filter) : allEvents;
   if (!filtered.length) { el.innerHTML = '<p class="empty">No events.</p>'; return; }
-  const rows = filtered.map(e => '<tr><td class="ts">' + ts(e.emittedAt) + '</td><td class="type-cell">' + esc(e.type) + '</td><td class="entity-cell">' + esc(e.entityId || '—') + '</td><td class="payload-cell" onclick="this.classList.toggle(\'expanded\')">' + esc(JSON.stringify(e.payload || {})) + '</td></tr>').join('');
+  const rows = filtered.map(e => '<tr><td class="ts">' + ts(e.emittedAt) + '</td><td class="type-cell">' + esc(e.type) + '</td><td class="entity-cell">' + esc(e.entityId || '—') + "</td><td class="payload-cell" onclick="this.classList.toggle('expanded')">" + esc(JSON.stringify(e.payload || {})) + '</td></tr>').join('');
   el.innerHTML = '<table><thead><tr><th>Time</th><th>Type</th><th>Entity</th><th>Payload</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── Init ─────────────────────────────────────────────────────────
 
-const savedToken = localStorage.getItem('defcon-token');
+const savedToken = sessionStorage.getItem('defcon-token');
 if (savedToken) {
   TOKEN = savedToken;
   document.getElementById('token-input').value = savedToken;
