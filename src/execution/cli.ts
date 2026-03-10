@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { Command } from "commander";
@@ -43,7 +42,6 @@ import type { IEntityRepository, IInvocationRepository } from "../repositories/i
 import { WebSocketBroadcaster } from "../ws/broadcast.js";
 import type { McpServerDeps, McpServerOpts } from "./mcp-server.js";
 import { createMcpServer, startStdioServer } from "./mcp-server.js";
-import { provisionWorktree } from "./provision-worktree.js";
 
 const DB_DEFAULT = process.env.DEFCON_DB_PATH ?? "./defcon.db";
 
@@ -533,31 +531,6 @@ program
     }
 
     sqlite.close();
-  });
-
-// ─── provision-worktree ───
-// TODO(WOP-2014): Remove this subcommand once nuke containers are deployed and stable.
-// Nuke workers provision their own workspace inside the container, making this unnecessary.
-program
-  .command("provision-worktree")
-  .description("[DEPRECATED] Provision a git worktree and branch for an issue (superseded by nuke containers)")
-  .argument("<repo>", "GitHub repo (e.g. wopr-network/defcon)")
-  .argument("<issue-key>", "Issue key (e.g. WOP-392)")
-  .option("--base-path <path>", "Worktree base directory", join(homedir(), "worktrees"))
-  .option("--clone-root <path>", "Directory where repos are cloned", homedir())
-  .action((repo: string, issueKey: string, opts: { basePath: string; cloneRoot: string }) => {
-    try {
-      const result = provisionWorktree({
-        repo,
-        issueKey,
-        basePath: opts.basePath,
-        cloneRoot: opts.cloneRoot,
-      });
-      process.stdout.write(`${JSON.stringify(result)}\n`);
-    } catch (err) {
-      process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-      process.exit(1);
-    }
   });
 
 /**

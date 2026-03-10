@@ -40,7 +40,7 @@ export class NukeDispatcher implements Dispatcher {
     private activityRepo: IEntityActivityRepo,
     opts: NukeDispatcherOpts = {},
   ) {
-    this.image = opts.image ?? process.env.NUKE_IMAGE ?? "wopr-nuke-coder";
+    this.image = opts.image ?? process.env.NUKE_IMAGE ?? "nuke-coder";
     this.claudeCredentialsPath = opts.claudeCredentialsPath ?? process.env.CLAUDE_CREDENTIALS_PATH;
     this.ghTokenPath = opts.ghTokenPath ?? process.env.GH_TOKEN_PATH;
     this.network = opts.network ?? process.env.NUKE_NETWORK;
