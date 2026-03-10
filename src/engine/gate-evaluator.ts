@@ -94,7 +94,8 @@ export async function evaluateGate(
       timedOut: result.timedOut,
       stdoutLineCount: stdoutLines.length,
       lastLine: lastLine ?? "(empty)",
-      stderrLength: result.output.length - result.stdout.length,
+      stdoutLength: result.stdout.length,
+      outputLength: result.output.length,
     });
 
     // Parse structured JSON outcome from the last non-empty stdout line.
