@@ -1,4 +1,6 @@
 import { NotFoundError, ValidationError } from "../errors.js";
+import { AdapterRegistry } from "../integrations/registry.js";
+import type { IIntegrationRepository } from "../integrations/repo.js";
 import type { Logger } from "../logger.js";
 import { consoleLogger } from "../logger.js";
 import type {
@@ -87,6 +89,8 @@ export interface EngineDeps {
   repoFactory?: (txDb: any) => TransactionRepos;
   /** Optional domain event repository. When provided, claimWork uses CAS on the event log to prevent concurrent claim races. */
   domainEvents?: IDomainEventRepository;
+  /** Optional integration repository. When provided, primitive gate ops and onEnter ops are resolved through the AdapterRegistry. */
+  integrationRepo?: IIntegrationRepository;
 }
 
 export class Engine {
@@ -103,6 +107,7 @@ export class Engine {
   // biome-ignore lint/suspicious/noExplicitAny: cross-driver compat
   private readonly repoFactory: ((txDb: any) => TransactionRepos) | null;
   private readonly domainEventRepo: IDomainEventRepository | null;
+  private readonly adapterRegistry: AdapterRegistry | null;
   private drainingWorkers = new Set<string>();
 
   constructor(deps: EngineDeps) {
@@ -117,6 +122,7 @@ export class Engine {
     this.withTransactionFn = deps.withTransaction ?? null;
     this.repoFactory = deps.repoFactory ?? null;
     this.domainEventRepo = deps.domainEvents ?? null;
+    this.adapterRegistry = deps.integrationRepo ? new AdapterRegistry(deps.integrationRepo) : null;
   }
 
   drainWorker(workerId: string): void {
@@ -324,7 +330,7 @@ export class Engine {
         if (refreshed) updated = refreshed;
       }
 
-      const onEnterResult = await executeOnEnter(newStateDef.onEnter, updated, entityRepo);
+      const onEnterResult = await executeOnEnter(newStateDef.onEnter, updated, entityRepo, flow, this.adapterRegistry);
       if (onEnterResult.skipped) {
         await emitter.emit({
           type: "onEnter.skipped",
@@ -481,7 +487,14 @@ export class Engine {
       entityArtifactKeys: Object.keys(entity.artifacts ?? {}),
     });
 
-    const gateResult = await evaluateGateForAllRepos(gate, entity, gateRepo, flow.gateTimeoutMs);
+    const gateResult = await evaluateGateForAllRepos(
+      gate,
+      entity,
+      gateRepo,
+      flow.gateTimeoutMs,
+      flow,
+      this.adapterRegistry,
+    );
 
     this.logger.debug(`[engine] gate "${gate.name}" result`, {
       entityId: entity.id,
@@ -608,7 +621,13 @@ export class Engine {
     // Execute onEnter hook if defined on initial state
     const initialState = flow.states.find((s) => s.name === flow.initialState);
     if (initialState?.onEnter) {
-      const onEnterResult = await executeOnEnter(initialState.onEnter, entity, this.entityRepo);
+      const onEnterResult = await executeOnEnter(
+        initialState.onEnter,
+        entity,
+        this.entityRepo,
+        flow,
+        this.adapterRegistry,
+      );
       if (onEnterResult.error) {
         await this.eventEmitter.emit({
           type: "onEnter.failed",

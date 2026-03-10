@@ -8,7 +8,12 @@ export type Artifacts = Record<string, unknown>;
 
 /** Configuration for running a command when an entity enters a state */
 export interface OnEnterConfig {
-  command: string;
+  /** Shell command (legacy). Mutually exclusive with `op`. */
+  command?: string;
+  /** Primitive op identifier, e.g. "issue_tracker.fetch_comment". Mutually exclusive with `command`. */
+  op?: string;
+  /** Handlebars-rendered params for the primitive op. */
+  params?: Record<string, unknown>;
   artifacts: string[];
   timeout_ms?: number;
 }
@@ -141,6 +146,10 @@ export interface Gate {
    *  where the entity goes. `proceed: true` means the original transition continues.
    *  `toState` redirects to a different state. */
   outcomes: Record<string, { proceed?: boolean; toState?: string }> | null;
+  /** Primitive op identifier, e.g. "vcs.ci_status". Only present for type === "primitive". */
+  primitiveOp: string | null;
+  /** Handlebars-rendered params for the primitive op. */
+  primitiveParams: Record<string, unknown> | null;
 }
 
 /** A complete flow definition with its states and transitions */
@@ -162,6 +171,10 @@ export interface Flow {
   defaultModelTier: string | null;
   timeoutPrompt: string | null;
   paused: boolean;
+  /** Integration scoping: which issue tracker this flow uses for primitive ops. */
+  issueTrackerIntegrationId: string | null;
+  /** Integration scoping: which VCS this flow uses for primitive ops. */
+  vcsIntegrationId: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
   states: State[];
@@ -195,6 +208,8 @@ export interface CreateFlowInput {
   defaultModelTier?: string;
   timeoutPrompt?: string;
   paused?: boolean;
+  issueTrackerIntegrationId?: string;
+  vcsIntegrationId?: string;
 }
 
 /** Input for adding a state to a flow */
@@ -230,6 +245,8 @@ export interface CreateGateInput {
   command?: string;
   functionRef?: string;
   apiConfig?: Record<string, unknown>;
+  primitiveOp?: string;
+  primitiveParams?: Record<string, unknown>;
   timeoutMs?: number;
   failurePrompt?: string;
   timeoutPrompt?: string;
