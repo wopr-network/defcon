@@ -73,6 +73,8 @@ function rowToFlow(r: typeof flowDefinitions.$inferSelect, states: State[], tran
     defaultModelTier: r.defaultModelTier ?? null,
     timeoutPrompt: r.timeoutPrompt ?? null,
     paused: !!r.paused,
+    issueTrackerIntegrationId: r.issueTrackerIntegrationId ?? null,
+    vcsIntegrationId: r.vcsIntegrationId ?? null,
     createdAt: toDate(r.createdAt),
     updatedAt: toDate(r.updatedAt),
     states,
@@ -122,6 +124,8 @@ export class DrizzleFlowRepository implements IFlowRepository {
       defaultModelTier: input.defaultModelTier ?? null,
       timeoutPrompt: input.timeoutPrompt ?? null,
       paused: input.paused ?? false,
+      issueTrackerIntegrationId: input.issueTrackerIntegrationId ?? null,
+      vcsIntegrationId: input.vcsIntegrationId ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -179,6 +183,9 @@ export class DrizzleFlowRepository implements IFlowRepository {
       discipline: string | null;
       defaultModelTier: string | null;
       timeoutPrompt: string | null;
+      // Added in migration 0003 — absent in snapshots created before that migration
+      issueTrackerIntegrationId?: string | null;
+      vcsIntegrationId?: string | null;
       createdAt: number | null;
       updatedAt: number | null;
       states: State[];
@@ -201,6 +208,8 @@ export class DrizzleFlowRepository implements IFlowRepository {
       defaultModelTier: snap.defaultModelTier ?? null,
       timeoutPrompt: snap.timeoutPrompt ?? null,
       paused: current.paused,
+      issueTrackerIntegrationId: snap.issueTrackerIntegrationId ?? null,
+      vcsIntegrationId: snap.vcsIntegrationId ?? null,
       createdAt: snap.createdAt ? new Date(snap.createdAt) : null,
       updatedAt: snap.updatedAt ? new Date(snap.updatedAt) : null,
       states: (snap.states ?? []).map((s) => ({

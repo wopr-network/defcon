@@ -194,6 +194,7 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
           }
         : undefined,
       domainEvents: repos.domainEvents,
+      integrationRepo: repos.integrations,
     });
     // Start a reaper for this tenant so stale claims get cleaned up.
     const stopReaper = engine.startReaper(30_000);
@@ -205,6 +206,7 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
       transitions: repos.transitionLog,
       eventRepo: repos.events,
       domainEvents: repos.domainEvents,
+      integrations: repos.integrations,
       engine,
       withTransaction: deps.withTransaction,
     };
@@ -522,6 +524,71 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
       await getMcpDeps(c),
       "admin.gate.rerun",
       { entity_id: c.req.param("id"), gate_name: c.req.param("gateName") },
+      { adminToken: deps.adminToken, callerToken },
+    );
+    const { status, body: resBody } = mcpResultToResponse(result);
+    return c.json(resBody as Record<string, unknown>, status as 200);
+  });
+
+  // ─── Integration CRUD ───
+
+  admin.post("/integrations", requireAdminAuth(), async (c) => {
+    const callerToken = extractBearerToken(c.req.header("authorization"));
+    const body = await parseJsonBody(c);
+    if (!body) return c.json({ error: "Invalid JSON" }, 400);
+    const result = await callToolHandler(await getMcpDeps(c), "admin.integration.create", body, {
+      adminToken: deps.adminToken,
+      callerToken,
+    });
+    const { status, body: resBody } = mcpResultToResponse(result);
+    return c.json(resBody as Record<string, unknown>, status === 200 ? 201 : (status as 200));
+  });
+
+  admin.get("/integrations", requireAdminAuth(), async (c) => {
+    const callerToken = extractBearerToken(c.req.header("authorization"));
+    const args: Record<string, unknown> = {};
+    const category = c.req.query("category");
+    if (category) args.category = category;
+    const result = await callToolHandler(await getMcpDeps(c), "admin.integration.list", args, {
+      adminToken: deps.adminToken,
+      callerToken,
+    });
+    const { status, body: resBody } = mcpResultToResponse(result);
+    return c.json(resBody as Record<string, unknown>, status as 200);
+  });
+
+  admin.get("/integrations/:id", requireAdminAuth(), async (c) => {
+    const callerToken = extractBearerToken(c.req.header("authorization"));
+    const result = await callToolHandler(
+      await getMcpDeps(c),
+      "admin.integration.get",
+      { integration_id: c.req.param("id") },
+      { adminToken: deps.adminToken, callerToken },
+    );
+    const { status, body: resBody } = mcpResultToResponse(result);
+    return c.json(resBody as Record<string, unknown>, status as 200);
+  });
+
+  admin.patch("/integrations/:id", requireAdminAuth(), async (c) => {
+    const callerToken = extractBearerToken(c.req.header("authorization"));
+    const body = await parseJsonBody(c);
+    if (!body) return c.json({ error: "Invalid JSON" }, 400);
+    const result = await callToolHandler(
+      await getMcpDeps(c),
+      "admin.integration.update",
+      { integration_id: c.req.param("id"), ...body },
+      { adminToken: deps.adminToken, callerToken },
+    );
+    const { status, body: resBody } = mcpResultToResponse(result);
+    return c.json(resBody as Record<string, unknown>, status as 200);
+  });
+
+  admin.delete("/integrations/:id", requireAdminAuth(), async (c) => {
+    const callerToken = extractBearerToken(c.req.header("authorization"));
+    const result = await callToolHandler(
+      await getMcpDeps(c),
+      "admin.integration.delete",
+      { integration_id: c.req.param("id") },
       { adminToken: deps.adminToken, callerToken },
     );
     const { status, body: resBody } = mcpResultToResponse(result);

@@ -233,6 +233,7 @@ program
         };
       },
       domainEvents: domainEventRepo,
+      integrationRepo: repos.integrations,
     });
 
     const deps: McpServerDeps = {
@@ -243,6 +244,7 @@ program
       transitions: transitionLogRepo,
       eventRepo: repos.events,
       domainEvents: domainEventRepo,
+      integrations: repos.integrations,
       engine,
       withTransaction: (fn) => db.transaction(async (tx) => fn(tx)),
       repoFactory: (tx) => {
@@ -454,6 +456,7 @@ program
                 };
               },
               domainEvents: sessionRepos.domainEvents,
+              integrationRepo: sessionRepos.integrations,
             });
             // Start a reaper for this tenant so stale claims get cleaned up.
             sessionEngine.startReaper(reaperInterval, claimTtl);
@@ -465,6 +468,7 @@ program
               transitions: sessionRepos.transitionLog,
               eventRepo: sessionRepos.events,
               domainEvents: sessionRepos.domainEvents,
+              integrations: sessionRepos.integrations,
               engine: sessionEngine,
               withTransaction: (fn) => db.transaction(async (tx) => fn(tx)),
               repoFactory: (tx) => {

@@ -1,4 +1,34 @@
-import { bigint, boolean, index, jsonb, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+
+// ─── Integration Tables ───
+
+/**
+ * Tenant-owned integrations: one row per connected provider instance.
+ * A tenant may have multiple integrations of the same category (e.g. two GitHub orgs).
+ * Credentials are AES-256-GCM encrypted at rest (SILO_ENCRYPTION_KEY).
+ */
+export const integrations = pgTable(
+  "integrations",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    /** Human-readable label, unique per tenant (e.g. "acme-github", "acme-linear"). */
+    name: text("name").notNull(),
+    /** "issue_tracker" | "vcs" */
+    category: text("category").notNull(),
+    /** "linear" | "jira" | "github_issues" | "github" | "gitlab" */
+    provider: text("provider").notNull(),
+    /** Encrypted JSON: { accessToken, refreshToken?, expiresAt?, ... } */
+    credentials: text("credentials").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_integration_tenant_name").on(table.tenantId, table.name),
+    index("idx_integrations_tenant").on(table.tenantId),
+    index("idx_integrations_tenant_category").on(table.tenantId, table.category),
+  ],
+);
 
 // ─── Definition Tables ───
 
@@ -22,12 +52,17 @@ export const flowDefinitions = pgTable(
     defaultModelTier: text("default_model_tier"),
     timeoutPrompt: text("timeout_prompt"),
     paused: boolean("paused").default(false),
+    /** Integration scoping: which issue tracker and VCS this flow uses for primitive ops. */
+    issueTrackerIntegrationId: text("issue_tracker_integration_id").references(() => integrations.id),
+    vcsIntegrationId: text("vcs_integration_id").references(() => integrations.id),
     createdAt: bigint("created_at", { mode: "number" }),
     updatedAt: bigint("updated_at", { mode: "number" }),
   },
   (table) => [
     uniqueIndex("uq_flow_tenant_name").on(table.tenantId, table.name),
     index("idx_flow_definitions_tenant").on(table.tenantId),
+    index("idx_flow_definitions_issue_tracker").on(table.issueTrackerIntegrationId),
+    index("idx_flow_definitions_vcs").on(table.vcsIntegrationId),
   ],
 );
 
@@ -64,6 +99,10 @@ export const gateDefinitions = pgTable(
     command: text("command"),
     functionRef: text("function_ref"),
     apiConfig: jsonb("api_config"),
+    /** Primitive op identifier, e.g. "vcs.ci_status" or "issue_tracker.comment_exists". */
+    primitiveOp: text("primitive_op"),
+    /** Handlebars-rendered params passed to the adapter op. */
+    primitiveParams: jsonb("primitive_params"),
     timeoutMs: bigint("timeout_ms", { mode: "number" }),
     failurePrompt: text("failure_prompt"),
     timeoutPrompt: text("timeout_prompt"),

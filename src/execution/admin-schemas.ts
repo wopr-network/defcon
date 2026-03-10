@@ -169,3 +169,43 @@ export const AdminEventsListSchema = z.object({
   type: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
+
+// ─── Integration schemas ───
+
+const IntegrationCredentialsSchema = z.union([
+  z.object({ provider: z.literal("linear"), accessToken: z.string().min(1), workspaceId: z.string().optional() }),
+  z.object({
+    provider: z.literal("jira"),
+    accessToken: z.string().min(1),
+    cloudId: z.string().min(1),
+    baseUrl: z.string().url(),
+  }),
+  z.object({
+    provider: z.union([z.literal("github"), z.literal("github_issues")]),
+    accessToken: z.string().min(1),
+    installationId: z.number().int().optional(),
+  }),
+  z.object({ provider: z.literal("gitlab"), accessToken: z.string().min(1), baseUrl: z.string().url().optional() }),
+]);
+
+export const AdminIntegrationCreateSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    category: z.enum(["issue_tracker", "vcs"]),
+    provider: z.enum(["linear", "jira", "github_issues", "github", "gitlab"]),
+    credentials: IntegrationCredentialsSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.credentials.provider !== data.provider) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["credentials"],
+        message: `credentials.provider ('${data.credentials.provider}') must match provider ('${data.provider}')`,
+      });
+    }
+  });
+
+export const AdminIntegrationUpdateSchema = z.object({
+  integration_id: z.string().min(1),
+  credentials: IntegrationCredentialsSchema,
+});

@@ -3,8 +3,10 @@ import { realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { GateError, NotFoundError, ValidationError } from "../errors.js";
+import type { AdapterRegistry } from "../integrations/registry.js";
+import type { PrimitiveOp } from "../integrations/types.js";
 import { logger } from "../logger.js";
-import type { Entity, Gate, IGateRepository } from "../repositories/interfaces.js";
+import type { Entity, Flow, Gate, IGateRepository } from "../repositories/interfaces.js";
 import { validateGateCommand } from "./gate-command-validator.js";
 import { checkSsrf } from "./ssrf-guard.js";
 
@@ -39,20 +41,94 @@ export function resolveGateTimeout(
 
 /**
  * Evaluate a gate against an entity. Records the result in gateRepo.
- * Supports "command", "function", and "api" gate types.
+ * Supports "command", "function", "api", and "primitive" gate types.
  */
 export async function evaluateGate(
   gate: Gate,
   entity: Entity,
   gateRepo: IGateRepository,
   flowGateTimeoutMs?: number | null,
+  flow?: Flow | null,
+  adapterRegistry?: AdapterRegistry | null,
 ): Promise<GateEvalResult> {
   const effectiveTimeout = resolveGateTimeout(gate.timeoutMs, flowGateTimeoutMs);
   let passed = false;
   let output = "";
   let timedOut = false;
 
-  if (gate.type === "command") {
+  if (gate.type === "primitive") {
+    if (!gate.primitiveOp) {
+      const result = { passed: false, timedOut: false, output: "Gate primitiveOp is not configured" };
+      await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+      return result;
+    }
+    if (!adapterRegistry) {
+      const result = { passed: false, timedOut: false, output: "AdapterRegistry not available for primitive gate" };
+      await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+      return result;
+    }
+
+    const op = gate.primitiveOp as PrimitiveOp;
+    const opCategory = op.split(".")[0];
+    const integrationId = opCategory === "issue_tracker" ? flow?.issueTrackerIntegrationId : flow?.vcsIntegrationId;
+
+    if (!integrationId) {
+      const result = {
+        passed: false,
+        timedOut: false,
+        output: `Flow has no ${opCategory} integration configured`,
+      };
+      await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+      return result;
+    }
+
+    // Render primitive params via Handlebars
+    let renderedParams: Record<string, unknown>;
+    try {
+      const hbs = (await import("./handlebars.js")).getHandlebars();
+      const rawParams = gate.primitiveParams ?? {};
+      renderedParams = Object.fromEntries(
+        Object.entries(rawParams).map(([k, v]) => [k, typeof v === "string" ? hbs.compile(v)({ entity }) : v]),
+      );
+    } catch (err) {
+      const msg = `Primitive gate template error: ${err instanceof Error ? err.message : String(err)}`;
+      await gateRepo.record(entity.id, gate.id, false, msg);
+      return { passed: false, timedOut: false, output: msg };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), effectiveTimeout);
+    let opResult: Record<string, unknown>;
+    try {
+      opResult = await adapterRegistry.execute(integrationId, op, renderedParams, controller.signal);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      timedOut = err instanceof Error && err.name === "AbortError";
+      await gateRepo.record(entity.id, gate.id, false, msg);
+      return { passed: false, timedOut, output: msg };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const outcome = typeof opResult.outcome === "string" ? opResult.outcome : undefined;
+    // A primitive gate passes if the outcome is "passed", "exists", "merged", or "queued",
+    // or if the gate's outcomes map declares proceed: true for the returned outcome.
+    const outcomeConfig = outcome ? gate.outcomes?.[outcome] : undefined;
+    if (outcomeConfig) {
+      passed = outcomeConfig.proceed === true;
+    } else {
+      passed = outcome === "passed" || outcome === "exists" || outcome === "merged" || outcome === "queued";
+    }
+    output = outcome ?? JSON.stringify(opResult);
+
+    logger.info(`[gate:primitive] "${gate.name}" op=${op} outcome=${outcome ?? "(none)"}`, {
+      entityId: entity.id,
+      passed,
+    });
+
+    await gateRepo.record(entity.id, gate.id, passed, output);
+    return { passed, timedOut: false, output, outcome };
+  } else if (gate.type === "command") {
     if (!gate.command) {
       return { passed: false, timedOut: false, output: "Gate command is not configured" };
     }
@@ -241,18 +317,22 @@ export async function evaluateGateForAllRepos(
   entity: Entity,
   gateRepo: IGateRepository,
   flowGateTimeoutMs?: number | null,
+  flow?: Flow | null,
+  adapterRegistry?: AdapterRegistry | null,
   evalFn: (
     gate: Gate,
     entity: Entity,
     gateRepo: IGateRepository,
     timeout?: number | null,
+    flow?: Flow | null,
+    adapterRegistry?: AdapterRegistry | null,
   ) => Promise<GateEvalResult> = evaluateGate,
 ): Promise<GateEvalResult> {
   const prs = entity.artifacts?.prs;
 
   // No prs map — single evaluation (backwards compat, or non-PR gate like spec-posted)
   if (!prs || typeof prs !== "object" || Object.keys(prs as Record<string, unknown>).length === 0) {
-    return evalFn(gate, entity, gateRepo, flowGateTimeoutMs);
+    return evalFn(gate, entity, gateRepo, flowGateTimeoutMs, flow, adapterRegistry);
   }
 
   const entries = Object.entries(prs as Record<string, string>);
@@ -277,7 +357,7 @@ export async function evaluateGateForAllRepos(
       },
     };
 
-    const result = await evalFn(gate, repoEntity, gateRepo, flowGateTimeoutMs);
+    const result = await evalFn(gate, repoEntity, gateRepo, flowGateTimeoutMs, flow, adapterRegistry);
     results.push(result);
 
     // Short-circuit on first failure

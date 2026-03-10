@@ -1,6 +1,7 @@
 // Shared helpers and types for MCP handler modules.
 // Extracted here to break the circular dependency between mcp-server.ts and the handler modules.
 import type { Engine } from "../engine/engine.js";
+import type { IIntegrationRepository } from "../integrations/repo.js";
 import type {
   IEntityRepository,
   IEventRepository,
@@ -17,6 +18,7 @@ export interface McpServerDeps {
   gates: IGateRepository;
   transitions: ITransitionLogRepository;
   eventRepo: IEventRepository;
+  integrations?: IIntegrationRepository;
   engine?: Engine;
 }
 
