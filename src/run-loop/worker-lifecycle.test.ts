@@ -41,7 +41,7 @@ function makeDefcon(responses: object[]) {
       return Promise.resolve(value);
     }),
     report: vi.fn().mockResolvedValue({ next_action: "waiting" }),
-  } as unknown as import("../defcon-client/client.js").DefconClient;
+  } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 }
 
 function makeDispatcher(): Dispatcher {
@@ -51,7 +51,7 @@ function makeDispatcher(): Dispatcher {
 function makeConfig(overrides: Partial<RunLoopConfig> = {}): RunLoopConfig {
   return {
     pool: new Pool(1),
-    defcon: makeDefcon([{ retry_after_ms: 50 }]),
+    engine: makeDefcon([{ retry_after_ms: 50 }]),
     dispatcher: makeDispatcher(),
     roles: [{ discipline: "engineering", count: 1 }],
     pollIntervalMs: 5,

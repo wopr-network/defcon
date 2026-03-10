@@ -1,13 +1,20 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema.js";
+import * as schema from "../repositories/drizzle/schema.js";
 
 export type RadarDb = ReturnType<typeof createDb>;
 
-function initSqlite(path: string): InstanceType<typeof Database> {
+/**
+ * Create a unified database with all tables (engine + worker pool).
+ *
+ * For tests that only need worker-pool tables, pass ":memory:" (default).
+ * The raw-SQL DDL ensures tables exist without requiring the full migration folder.
+ */
+export function createDb(path: string = ":memory:") {
   const sqlite = new Database(path);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  // Create worker-pool tables via raw SQL (tests that don't run full migrations)
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS sources (
       id TEXT PRIMARY KEY,
@@ -75,15 +82,10 @@ function initSqlite(path: string): InstanceType<typeof Database> {
     CREATE INDEX IF NOT EXISTS entity_activity_entity_id_idx ON entity_activity (entity_id);
     CREATE UNIQUE INDEX IF NOT EXISTS entity_activity_entity_seq_uniq ON entity_activity (entity_id, seq);
   `);
-  return sqlite;
+  return drizzle(sqlite, { schema });
 }
 
+/** @deprecated Use createDb instead */
 export function applySchema(path: string = ":memory:") {
-  const sqlite = initSqlite(path);
-  return drizzle(sqlite, { schema });
-}
-
-export function createDb(path: string = ":memory:") {
-  const sqlite = initSqlite(path);
-  return drizzle(sqlite, { schema });
+  return createDb(path);
 }

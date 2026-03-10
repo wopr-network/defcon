@@ -1,3 +1,5 @@
+import { accessSync, constants } from "node:fs";
+import { dirname } from "node:path";
 import winston from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 
@@ -38,6 +40,7 @@ const consoleTransport = new winston.transports.Console({
 const transports: winston.transport[] = [consoleTransport];
 
 try {
+  accessSync(dirname(logFile), constants.W_OK);
   const fileTransport = new DailyRotateFile({
     filename: logFile,
     datePattern: "YYYY-MM-DD",
@@ -47,7 +50,7 @@ try {
   fileTransport.on("error", (_err: Error) => {});
   transports.push(fileTransport);
 } catch {
-  // /data not available — console-only logging
+  // Log directory not writable — console-only logging
 }
 
 export const logger = winston.createLogger({

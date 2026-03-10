@@ -25,7 +25,7 @@ function makeDefcon(responses: object[]) {
       return Promise.resolve(value);
     }),
     report: vi.fn().mockResolvedValue(undefined),
-  } as unknown as import("../defcon-client/client.js").DefconClient;
+  } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 }
 
 function makeDispatcher(result: WorkerResult): Dispatcher {
@@ -35,7 +35,7 @@ function makeDispatcher(result: WorkerResult): Dispatcher {
 function makeConfig(overrides: Partial<RunLoopConfig> = {}): RunLoopConfig {
   return {
     pool: new Pool(1),
-    defcon: makeDefcon([{ retry_after_ms: 50 }]),
+    engine: makeDefcon([{ retry_after_ms: 50 }]),
     dispatcher: makeDispatcher({ signal: "pr_created", artifacts: {}, exitCode: 0 }),
     activityRepo: makeActivityRepo(""),
     roles: [{ discipline: "engineering", count: 1 }],
@@ -69,9 +69,9 @@ describe("RunLoop — activity history injection on continue", () => {
         }
         return Promise.resolve({ next_action: "done" });
       }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
-    const config = makeConfig({ pool: new Pool(1), defcon, dispatcher, activityRepo });
+    const config = makeConfig({ pool: new Pool(1), engine: defcon, dispatcher, activityRepo });
     const loop = new RunLoop(config);
     loop.start();
 
@@ -106,9 +106,9 @@ describe("RunLoop — activity history injection on continue", () => {
         }
         return Promise.resolve({ next_action: "done" });
       }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
-    const config = makeConfig({ pool: new Pool(1), defcon, dispatcher, activityRepo });
+    const config = makeConfig({ pool: new Pool(1), engine: defcon, dispatcher, activityRepo });
     const loop = new RunLoop(config);
     loop.start();
 
@@ -135,10 +135,10 @@ describe("RunLoop — activityHistory injection on report", () => {
     const defcon = {
       claim: vi.fn().mockResolvedValueOnce(firstClaim).mockResolvedValue({ retry_after_ms: 50 }),
       report: vi.fn().mockResolvedValue({ next_action: "done" }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
     const dispatcher = makeDispatcher({ signal: "pr_created", artifacts: { prNumber: 42 }, exitCode: 0 });
-    const config = makeConfig({ pool: new Pool(1), defcon, dispatcher, activityRepo });
+    const config = makeConfig({ pool: new Pool(1), engine: defcon, dispatcher, activityRepo });
     const loop = new RunLoop(config);
     loop.start();
 
@@ -167,10 +167,10 @@ describe("RunLoop — activityHistory injection on report", () => {
     const defcon = {
       claim: vi.fn().mockResolvedValueOnce(firstClaim).mockResolvedValue({ retry_after_ms: 50 }),
       report: vi.fn().mockResolvedValue({ next_action: "done" }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
     const dispatcher = makeDispatcher({ signal: "pr_created", artifacts: { prNumber: 1 }, exitCode: 0 });
-    const config = makeConfig({ pool: new Pool(1), defcon, dispatcher, activityRepo });
+    const config = makeConfig({ pool: new Pool(1), engine: defcon, dispatcher, activityRepo });
     const loop = new RunLoop(config);
     loop.start();
 
@@ -195,10 +195,10 @@ describe("RunLoop — activityHistory injection on report", () => {
     const defcon = {
       claim: vi.fn().mockResolvedValueOnce(firstClaim).mockResolvedValue({ retry_after_ms: 50 }),
       report: vi.fn().mockResolvedValue({ next_action: "done" }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
     const dispatcher = makeDispatcher({ signal: "pr_created", artifacts: {}, exitCode: 0 });
-    const config = makeConfig({ pool: new Pool(1), defcon, dispatcher, activityRepo });
+    const config = makeConfig({ pool: new Pool(1), engine: defcon, dispatcher, activityRepo });
     const loop = new RunLoop(config);
     loop.start();
 
@@ -222,11 +222,11 @@ describe("RunLoop — multi-discipline routing", () => {
         .mockResolvedValueOnce({ entity_id: "e-ops", prompt: "ops work", flow: "f1" })
         .mockResolvedValue({ retry_after_ms: 50 }),
       report: vi.fn().mockResolvedValue({ next_action: "done" }),
-    } as unknown as import("../defcon-client/client.js").DefconClient;
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
 
     const config = makeConfig({
       pool: new Pool(2),
-      defcon,
+      engine: defcon,
       dispatcher,
       roles: [
         { discipline: "engineering", count: 1 },

@@ -1,5 +1,5 @@
-import type { DefconClient } from "../defcon-client/client.js";
 import type { INukeDispatcher as Dispatcher } from "../dispatcher/types.js";
+import type { IFlowEngine } from "../engine/flow-engine-interface.js";
 import type { Pool } from "../pool/pool.js";
 import type { ThroughputTracker } from "../pool/throughput-tracker.js";
 import type { IEntityActivityRepo } from "../radar-db/repos/i-entity-activity-repo.js";
@@ -12,7 +12,8 @@ export interface SlotRole {
 
 export interface RunLoopConfig {
   pool: Pool;
-  defcon: DefconClient;
+  /** Flow engine — either DirectFlowEngine (in-process) or DefconClient (HTTP). */
+  engine: IFlowEngine;
   dispatcher: Dispatcher;
   activityRepo?: IEntityActivityRepo;
   workerRepo?: IWorkerRepo;

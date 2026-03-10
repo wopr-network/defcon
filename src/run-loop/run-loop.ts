@@ -167,7 +167,7 @@ export class RunLoop {
   }
 
   private async claimAndProcess(slotId: string, workerId: string, discipline: string): Promise<void> {
-    const { defcon, dispatcher, pool, flow } = this.config;
+    const { engine: defcon, dispatcher, pool, flow } = this.config;
 
     // Concurrency gate: global per-flow limit
     // Use pendingClaims to prevent TOCTOU: multiple slots checking the count

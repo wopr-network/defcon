@@ -1,88 +1,10 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-
-export const sources = sqliteTable("sources", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  type: text("type").notNull(),
-  config: text("config").notNull(),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-});
-
-export const watches = sqliteTable("watches", {
-  id: text("id").primaryKey(),
-  sourceId: text("source_id")
-    .notNull()
-    .references(() => sources.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  filter: text("filter").notNull(),
-  action: text("action").notNull(),
-  actionConfig: text("action_config").notNull(),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-});
-
-export const eventLog = sqliteTable("event_log", {
-  id: text("id").primaryKey(),
-  sourceId: text("source_id")
-    .notNull()
-    .references(() => sources.id, { onDelete: "cascade" }),
-  watchId: text("watch_id").references(() => watches.id, { onDelete: "cascade" }),
-  rawEvent: text("raw_event").notNull(),
-  actionTaken: text("action_taken"),
-  defconResponse: text("defcon_response"),
-  createdAt: integer("created_at").notNull(),
-});
-
-export const workers = sqliteTable("workers", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  type: text("type").notNull(),
-  discipline: text("discipline").notNull(),
-  status: text("status").notNull().default("idle"),
-  config: text("config"),
-  lastHeartbeat: integer("last_heartbeat").notNull(),
-  createdAt: integer("created_at").notNull(),
-});
-
-export const entityActivity = sqliteTable(
-  "entity_activity",
-  {
-    id: text("id").primaryKey(),
-    entityId: text("entity_id").notNull(),
-    slotId: text("slot_id").notNull(),
-    seq: integer("seq").notNull(),
-    type: text("type").notNull(), // "start" | "tool_use" | "text" | "result"
-    data: text("data").notNull(), // JSON blob
-    createdAt: integer("created_at").notNull(),
-  },
-  (t) => [
-    index("entity_activity_entity_id_idx").on(t.entityId),
-    uniqueIndex("entity_activity_entity_seq_uniq").on(t.entityId, t.seq),
-  ],
-);
-
-export const throughputEvents = sqliteTable(
-  "throughput_events",
-  {
-    id: text("id").primaryKey(),
-    outcome: text("outcome").notNull(), // "completed" | "failed"
-    durationMs: integer("duration_ms").notNull(),
-    createdAt: integer("created_at").notNull(),
-  },
-  (t) => [index("throughput_events_created_at_idx").on(t.createdAt)],
-);
-
-export const entityMap = sqliteTable(
-  "entity_map",
-  {
-    id: text("id").primaryKey(),
-    sourceId: text("source_id").notNull(),
-    externalId: text("external_id").notNull(),
-    entityId: text("entity_id").notNull(),
-    createdAt: integer("created_at").notNull(),
-  },
-  (t) => [uniqueIndex("entity_map_source_external_uniq").on(t.sourceId, t.externalId)],
-);
+// Re-export worker pool tables from unified schema
+export {
+  entityActivity,
+  entityMap,
+  eventLog,
+  sources,
+  throughputEvents,
+  watches,
+  workers,
+} from "../repositories/drizzle/schema.js";

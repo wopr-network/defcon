@@ -1,15 +1,14 @@
 import type { ClaimResponse, CreateEntityResponse, ReportResponse } from "../api/wire-types.js";
+import type { FlowEngineRequestOptions, IFlowEngine } from "../engine/flow-engine-interface.js";
 
 export interface DefconClientConfig {
   url: string;
   workerToken?: string;
 }
 
-export interface DefconRequestOptions {
-  signal?: AbortSignal;
-}
+export type DefconRequestOptions = FlowEngineRequestOptions;
 
-export class DefconClient {
+export class DefconClient implements IFlowEngine {
   private url: string;
   private authHeader: Record<string, string>;
 
@@ -54,13 +53,14 @@ export class DefconClient {
       entityId: string;
       signal: string;
       artifacts?: Record<string, unknown>;
+      workerId?: string;
     },
     opts?: DefconRequestOptions,
   ): Promise<ReportResponse> {
     // flow.report blocks — no timeout applied
-    // workerId is not forwarded by the defcon REST report endpoint
     const body: Record<string, unknown> = { signal: params.signal };
     if (params.artifacts) body.artifacts = params.artifacts;
+    if (params.workerId) body.worker_id = params.workerId;
     const res = await fetch(`${this.url}/api/entities/${encodeURIComponent(params.entityId)}/report`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...this.authHeader },
