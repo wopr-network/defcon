@@ -17,6 +17,9 @@ import type { McpServerDeps } from "../execution/mcp-server.js";
 import { callToolHandler } from "../execution/mcp-server.js";
 import type { Logger } from "../logger.js";
 import { consoleLogger } from "../logger.js";
+import type { Pool } from "../pool/index.js";
+import type { IEntityActivityRepo } from "../radar-db/repos/i-entity-activity-repo.js";
+import type { EventLogRepo, IWorkerRepo, SourceRepo, WatchRepo } from "../radar-db/types.js";
 import { createScopedRepos } from "../repositories/scoped-repos.js";
 import { UI_HTML } from "../ui/index.html.js";
 
@@ -124,6 +127,18 @@ export interface HonoServerDeps {
   logger?: Logger;
   enableUi?: boolean;
   sseAdapter?: HonoSseAdapter;
+  /** Worker pool — exposes slot/capacity data via /api/pool/slots */
+  pool?: Pool;
+  /** Worker registry — exposes registered workers via /api/workers */
+  workerRepo?: IWorkerRepo;
+  /** Entity activity log — exposes per-entity activity via /api/entities/:id/activity */
+  activityRepo?: IEntityActivityRepo;
+  /** Source registry — exposes sources via /api/sources */
+  sourceRepo?: SourceRepo;
+  /** Watch registry — exposes watches via /api/sources/:id/watches */
+  watchRepo?: WatchRepo;
+  /** Event log — exposes ingest events via /api/events */
+  eventLogRepo?: EventLogRepo;
 }
 
 // ─── Build the Hono app ───
@@ -397,6 +412,55 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
     const result = await callToolHandler(await getMcpDeps(c), "query.entities", args);
     const { status, body: resBody } = mcpResultToResponse(result);
     return c.json(resBody as Record<string, unknown>, status as 200);
+  });
+
+  // ─── Entity activity (RADAR) ───
+  app.get("/api/entities/:id/activity", requireAdminAuth(), async (c) => {
+    if (!deps.activityRepo) return c.json({ error: "Activity repo not configured" }, 503);
+    const entityId = c.req.param("id") ?? "";
+    const sinceStr = c.req.query("since");
+    const since = sinceStr !== undefined ? parseInt(sinceStr, 10) : 0;
+    const items = await deps.activityRepo.getByEntity(entityId, since || undefined);
+    const nextSeq = items.length > 0 ? (items[items.length - 1]?.seq ?? 0) + 1 : since;
+    return c.json({ items, nextSeq });
+  });
+
+  // ─── Pool slots (RADAR) ───
+  app.get("/api/pool/slots", requireAdminAuth(), async (c) => {
+    if (!deps.pool) return c.json({ slots: [], available: 0, capacity: 0 });
+    return c.json({
+      slots: deps.pool.activeSlots(),
+      available: deps.pool.availableSlots(),
+      capacity: deps.pool.getCapacity(),
+    });
+  });
+
+  // ─── Workers (RADAR) ───
+  app.get("/api/workers", requireAdminAuth(), async (c) => {
+    if (!deps.workerRepo) return c.json([]);
+    const workers = await deps.workerRepo.list();
+    return c.json(workers);
+  });
+
+  // ─── Sources (RADAR) ───
+  app.get("/api/sources", requireAdminAuth(), async (c) => {
+    if (!deps.sourceRepo) return c.json([]);
+    return c.json(await deps.sourceRepo.findAll());
+  });
+
+  app.get("/api/sources/:id/watches", requireAdminAuth(), async (c) => {
+    if (!deps.watchRepo) return c.json([]);
+    return c.json(await deps.watchRepo.findBySourceId(c.req.param("id") ?? ""));
+  });
+
+  // ─── Event log (RADAR) ───
+  app.get("/api/events", requireAdminAuth(), async (c) => {
+    if (!deps.eventLogRepo) return c.json([]);
+    const limitStr = c.req.query("limit");
+    const offsetStr = c.req.query("offset");
+    const limit = limitStr ? parseInt(limitStr, 10) : 50;
+    const offset = offsetStr ? parseInt(offsetStr, 10) : 0;
+    return c.json(await deps.eventLogRepo.findAll({ limit, offset }));
   });
 
   // ─── Flow definitions ───
