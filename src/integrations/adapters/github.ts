@@ -193,6 +193,11 @@ export class GitHubVcsAdapter implements IVcsAdapter {
     // Direct merge succeeded — PR is already merged
     if (mergeRes.ok) return { outcome: "merged" };
 
+    // Fail fast on unexpected errors (403, 404, 422, 500, etc.)
+    if (mergeRes.status !== 405) {
+      throw new Error(`Merge failed with status ${mergeRes.status}`);
+    }
+
     // 405 = cannot merge yet (CI pending or conflicts); enable auto-merge via GraphQL
     if (mergeRes.status === 405) {
       const [owner, repoName] = repo.split("/");
