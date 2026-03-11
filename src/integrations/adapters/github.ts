@@ -177,6 +177,76 @@ export class GitHubVcsAdapter implements IVcsAdapter {
 
     return { worktreePath, codebasePath: worktreePath, branch };
   }
+
+  async mergePr(
+    { repo, prNumber }: { repo: string; prNumber: string | number },
+    signal?: AbortSignal,
+  ): Promise<PrimitiveOpResult> {
+    // Try direct merge (works when CI is already green)
+    const mergeRes = await fetch(`https://api.github.com/repos/${repo}/pulls/${prNumber}/merge`, {
+      method: "PUT",
+      headers: { ...this.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ merge_method: "squash" }),
+      signal,
+    });
+
+    // 405 = cannot merge yet (CI pending or conflicts); enable auto-merge via GraphQL
+    if (mergeRes.status === 405) {
+      const [owner, repoName] = repo.split("/");
+      const nodeQuery = `query($owner: String!, $repo: String!, $pr: Int!) {
+        repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { id } }
+      }`;
+      const nodeRes = await fetch("https://api.github.com/graphql", {
+        method: "POST",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: nodeQuery, variables: { owner, repo: repoName, pr: Number(prNumber) } }),
+        signal,
+      });
+      if (nodeRes.ok) {
+        const nodeData = (await nodeRes.json()) as {
+          data?: { repository?: { pullRequest?: { id: string } } };
+        };
+        const prNodeId = nodeData.data?.repository?.pullRequest?.id;
+        if (prNodeId) {
+          const enableMutation = `mutation($id: ID!) {
+            enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+              clientMutationId
+            }
+          }`;
+          await fetch("https://api.github.com/graphql", {
+            method: "POST",
+            headers: { ...this.headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: enableMutation, variables: { id: prNodeId } }),
+            signal,
+          });
+        }
+      }
+    }
+
+    // Poll until merged or closed
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, ms);
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+
+    while (!signal?.aborted) {
+      await sleep(30_000);
+      if (signal?.aborted) break;
+      const pr = await this.getPr(repo, prNumber);
+      if (pr.merged) return { outcome: "merged" };
+      if (pr.state === "closed") return { outcome: "closed" };
+    }
+
+    return { outcome: "blocked" };
+  }
 }
 
 /** GitHub Issues as an issue tracker (uses REST Issues API). */

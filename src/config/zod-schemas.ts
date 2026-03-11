@@ -119,6 +119,7 @@ export const PrimitiveGateSchema = BaseGateSchema.extend({
     "vcs.fetch_pr_diff",
     "vcs.fetch_pr_comments",
     "vcs.provision_worktree",
+    "vcs.merge_pr",
   ]),
   primitiveParams: z.record(z.string(), z.unknown()).optional(),
 });

@@ -132,6 +132,13 @@ export interface IVcsAdapter {
     params: { repo: string; branch: string; basePath?: string },
     signal?: AbortSignal,
   ): Promise<PrimitiveOpResult>;
+
+  /**
+   * Trigger an auto-merge (squash) and poll until the PR is merged, closed, or timed out.
+   * Returns: { outcome: "merged" | "closed" | "blocked" }
+   * "blocked" means the gate timed out before the PR resolved.
+   */
+  mergePr(params: { repo: string; prNumber: string | number }, signal?: AbortSignal): Promise<PrimitiveOpResult>;
 }
 
 // ─── Op Registry ───
@@ -147,7 +154,8 @@ export type PrimitiveOp =
   | "vcs.pr_merge_queue_status"
   | "vcs.fetch_pr_diff"
   | "vcs.fetch_pr_comments"
-  | "vcs.provision_worktree";
+  | "vcs.provision_worktree"
+  | "vcs.merge_pr";
 
 export function opCategory(op: PrimitiveOp): IntegrationCategory {
   const prefix = op.split(".")[0];

@@ -137,4 +137,51 @@ export class GitLabVcsAdapter implements IVcsAdapter {
 
     return { worktreePath, codebasePath: worktreePath, branch };
   }
+
+  async mergePr(
+    { repo, prNumber }: { repo: string; prNumber: string | number },
+    signal?: AbortSignal,
+  ): Promise<PrimitiveOpResult> {
+    // Enable merge when pipeline succeeds (GitLab's equivalent of auto-merge)
+    const mergeRes = await fetch(
+      `${this.baseUrl}/api/v4/projects/${this.encodedRepo(repo)}/merge_requests/${prNumber}/merge`,
+      {
+        method: "PUT",
+        headers: this.headers,
+        body: JSON.stringify({ merge_when_pipeline_succeeds: true, squash: true }),
+        signal,
+      },
+    );
+    if (!mergeRes.ok && mergeRes.status !== 405 && mergeRes.status !== 406) {
+      throw new Error(`GitLab API error ${mergeRes.status} triggering merge`);
+    }
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, ms);
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+
+    while (!signal?.aborted) {
+      await sleep(30_000);
+      if (signal?.aborted) break;
+      const res = await fetch(`${this.baseUrl}/api/v4/projects/${this.encodedRepo(repo)}/merge_requests/${prNumber}`, {
+        headers: this.headers,
+        signal,
+      });
+      if (!res.ok) throw new Error(`GitLab API error ${res.status} polling MR`);
+      const mr = (await res.json()) as { state: string };
+      if (mr.state === "merged") return { outcome: "merged" };
+      if (mr.state === "closed") return { outcome: "closed" };
+    }
+
+    return { outcome: "blocked" };
+  }
 }
