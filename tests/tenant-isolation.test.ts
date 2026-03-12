@@ -648,8 +648,9 @@ describe("tenant isolation — admin auth downgrade", () => {
     await repos.flows.create({ name: "test-flow", initialState: "s1" });
 
     // Non-admin caller with X-Tenant-Id header → should see default tenant data
+    // (worker token authenticates but is not admin, so tenant downgrade applies)
     const res = await app.request("/api/flows", {
-      headers: { "x-tenant-id": "other-tenant" },
+      headers: { "x-tenant-id": "other-tenant", authorization: "Bearer worker-token" },
     });
     expect(res.status).toBe(200);
     const flows = (await res.json()) as Array<{ name: string }>;

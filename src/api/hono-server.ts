@@ -319,6 +319,22 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
     };
   }
 
+  // biome-ignore lint/suspicious/noConfusingVoidType: Hono middleware next() returns void
+  function requireAuth(): (c: import("hono").Context, next: () => Promise<void>) => Promise<Response | void> {
+    return async (c, next) => {
+      const callerToken = extractBearerToken(c.req.header("authorization"));
+      if (!callerToken) {
+        return c.json({ error: "Unauthorized: this endpoint requires authentication." }, 401);
+      }
+      const workerOk = deps.workerToken?.trim() && tokensMatch(deps.workerToken.trim(), callerToken);
+      const adminOk = deps.adminToken?.trim() && tokensMatch(deps.adminToken.trim(), callerToken);
+      if (!workerOk && !adminOk) {
+        return c.json({ error: "Unauthorized: this endpoint requires authentication." }, 401);
+      }
+      return next();
+    };
+  }
+
   // ─── JSON body parser with explicit error ───
   async function parseJsonBody(c: import("hono").Context): Promise<Record<string, unknown> | null> {
     try {
@@ -329,7 +345,7 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
   }
 
   // ─── Status ───
-  app.get("/api/status", async (c) => {
+  app.get("/api/status", requireAuth(), async (c) => {
     const status = await (await getEngine(c)).getStatus();
     return c.json(status);
   });
@@ -380,7 +396,7 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
   });
 
   // ─── Entity CRUD ───
-  app.post("/api/entities", async (c) => {
+  app.post("/api/entities", requireWorkerAuth(), async (c) => {
     const body = await parseJsonBody(c);
     if (!body) return c.json({ error: "Invalid JSON" }, 400);
     const flowName = body.flow as string;
@@ -397,13 +413,13 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
     }
   });
 
-  app.get("/api/entities/:id", async (c) => {
+  app.get("/api/entities/:id", requireAuth(), async (c) => {
     const result = await callToolHandler(await getMcpDeps(c), "query.entity", { id: c.req.param("id") });
     const { status, body: resBody } = mcpResultToResponse(result);
     return c.json(resBody as Record<string, unknown>, status as 200);
   });
 
-  app.get("/api/entities", async (c) => {
+  app.get("/api/entities", requireAuth(), async (c) => {
     const flow = c.req.query("flow");
     const state = c.req.query("state");
     if (!flow || !state) return c.json({ error: "Required query params: flow, state" }, 400);
@@ -468,25 +484,25 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
   });
 
   // ─── Flow definitions ───
-  app.get("/api/flows", async (c) => {
+  app.get("/api/flows", requireAuth(), async (c) => {
     const flows = await (await getMcpDeps(c)).flows.listAll();
     return c.json(flows as unknown as Record<string, unknown>[]);
   });
 
-  app.get("/api/flows/:id", async (c) => {
+  app.get("/api/flows/:id", requireAuth(), async (c) => {
     const result = await callToolHandler(await getMcpDeps(c), "query.flow", { name: c.req.param("id") });
     const { status, body: resBody } = mcpResultToResponse(result);
     return c.json(resBody as Record<string, unknown>, status as 200);
   });
 
-  app.put("/api/flows/:id", async (c) => {
+  app.put("/api/flows/:id", requireAdminAuth(), async (c) => {
     let body: Record<string, unknown>;
     try {
       body = (await c.req.json()) as Record<string, unknown>;
     } catch {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
-    const flowName = c.req.param("id");
+    const flowName = c.req.param("id") ?? "";
     const existing = await (await getMcpDeps(c)).flows.getByName(flowName);
     const callerToken = extractBearerToken(c.req.header("authorization"));
     const toolName = existing ? "admin.flow.update" : "admin.flow.create";
@@ -501,7 +517,7 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
     return c.json(resBody as Record<string, unknown>, status as 200);
   });
 
-  app.delete("/api/flows/:id", async (c) => {
+  app.delete("/api/flows/:id", requireAdminAuth(), async (c) => {
     return c.json({ error: "Flow deletion not implemented" }, 501);
   });
 

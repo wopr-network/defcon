@@ -210,7 +210,7 @@ describe("E2E: full-stack silo flow", { timeout: 15000 }, () => {
 			expect(approveResult.terminal).toBe(true);
 
 			// 6. Verify entity is in done state via GET
-			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`);
+			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`, { headers: workerHeaders() });
 			expect(getRes.status).toBe(200);
 			const finalEntity = (await getRes.json()) as { state: string };
 			expect(finalEntity.state).toBe("done");
@@ -370,7 +370,7 @@ describe("E2E: full-stack silo flow", { timeout: 15000 }, () => {
 			expect(cancelRes.status).toBe(200);
 
 			// Verify entity is now in cancelled state
-			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`);
+			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`, { headers: workerHeaders() });
 			const cancelled = (await getRes.json()) as { state: string };
 			expect(cancelled.state).toBe("cancelled");
 		});
@@ -402,7 +402,7 @@ describe("E2E: full-stack silo flow", { timeout: 15000 }, () => {
 			expect(resetRes.status).toBe(200);
 
 			// Verify via GET
-			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`);
+			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`, { headers: workerHeaders() });
 			const resetEntity = (await getRes.json()) as { state: string };
 			expect(resetEntity.state).toBe("backlog");
 		});
@@ -439,7 +439,7 @@ describe("E2E: full-stack silo flow", { timeout: 15000 }, () => {
 			expect(validateResult.newState).toBeUndefined();
 
 			// Entity must still be in pending state
-			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`);
+			const getRes = await fetch(`http://127.0.0.1:${ctx.port}/api/entities/${entity.id}`, { headers: workerHeaders() });
 			const pendingEntity = (await getRes.json()) as { state: string };
 			expect(pendingEntity.state).toBe("pending");
 		});

@@ -34,7 +34,7 @@ async function makeTestDeps(): Promise<HonoServerDeps & { stopReaper: () => Prom
     engine,
   };
 
-  return { engine, mcpDeps, db, defaultTenantId: "test-tenant", eventEmitter, adminToken: undefined, workerToken: "test-worker-token", stopReaper, closeDb: close };
+  return { engine, mcpDeps, db, defaultTenantId: "test-tenant", eventEmitter, adminToken: "test-admin-token", workerToken: "test-worker-token", stopReaper, closeDb: close };
 }
 
 async function startTestServer(deps: HonoServerDeps): Promise<{ server: http.Server; port: number }> {
@@ -47,6 +47,9 @@ async function startTestServer(deps: HonoServerDeps): Promise<{ server: http.Ser
   const port = (server.address() as { port: number }).port;
   return { server, port };
 }
+
+const workerHeaders = { Authorization: "Bearer test-worker-token" };
+const adminHeaders = { Authorization: "Bearer test-admin-token" };
 
 // ─── HTTP server integration tests ───────────────────────────────────────────
 
@@ -69,7 +72,7 @@ describe("HTTP Server - basic", () => {
   });
 
   it("GET /api/status returns engine status", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/status`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/status`, { headers: workerHeaders });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("flows");
@@ -83,21 +86,21 @@ describe("HTTP Server - basic", () => {
   });
 
   it("GET /api/flows returns empty array initially", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/flows`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/flows`, { headers: workerHeaders });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual([]);
   });
 
   it("GET /api/entities without query params returns 400", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities`, { headers: workerHeaders });
     expect(res.status).toBe(400);
   });
 
   it("POST /api/entities with missing flow returns 400", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...workerHeaders },
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
@@ -106,14 +109,14 @@ describe("HTTP Server - basic", () => {
   it("POST /api/entities with unknown flow returns 4xx", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...workerHeaders },
       body: JSON.stringify({ flow: "nonexistent-flow" }),
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 
   it("GET /api/entities/:id for missing entity returns 404", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities/does-not-exist`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities/does-not-exist`, { headers: workerHeaders });
     expect(res.status).toBe(404);
   });
 
@@ -128,6 +131,7 @@ describe("HTTP Server - basic", () => {
   it("DELETE /api/flows/:id returns 501", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/flows/some-flow`, {
       method: "DELETE",
+      headers: adminHeaders,
     });
     expect(res.status).toBe(501);
   });
@@ -145,7 +149,7 @@ describe("HTTP Server - basic", () => {
   it("POST with invalid JSON returns 400", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...workerHeaders },
       body: "not valid json{{{",
     });
     expect(res.status).toBe(400);
@@ -155,7 +159,7 @@ describe("HTTP Server - basic", () => {
 
   it("CORS header not set for non-loopback origin", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { Origin: "https://evil.com" },
+      headers: { Origin: "https://evil.com", ...workerHeaders },
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
@@ -163,7 +167,7 @@ describe("HTTP Server - basic", () => {
 
   it("CORS header set for loopback origin", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { Origin: "http://127.0.0.1:3000" },
+      headers: { Origin: "http://127.0.0.1:3000", ...workerHeaders },
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://127.0.0.1:3000");
@@ -178,36 +182,36 @@ describe("HTTP Server - basic", () => {
   });
 
   it("GET /api/entities with only flow param returns 400", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test`, { headers: workerHeaders });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Required query params: flow, state");
   });
 
   it("GET /api/entities with only state param returns 400", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities?state=init`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities?state=init`, { headers: workerHeaders });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Required query params: flow, state");
   });
 
   it("GET /api/entities with valid flow+state returns non-400", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init`, { headers: workerHeaders });
     expect(res.status).not.toBe(400);
   });
 
   it("GET /api/entities with limit param returns non-400", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init&limit=5`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init&limit=5`, { headers: workerHeaders });
     expect(res.status).not.toBe(400);
   });
 
   it("GET /api/entities with invalid limit param ignored", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init&limit=abc`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/entities?flow=test&state=init&limit=abc`, { headers: workerHeaders });
     expect(res.status).not.toBe(400);
   });
 
   it("GET /api/flows/:id for unknown flow returns 404", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/flows/nonexistent-flow-xyz`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/flows/nonexistent-flow-xyz`, { headers: workerHeaders });
     expect(res.status).toBe(404);
   });
 
@@ -271,21 +275,21 @@ describe("HTTP Server - explicit CORS origin", () => {
 
   it("reflects matching explicit CORS origin", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { Origin: "https://app.example.com" },
+      headers: { Origin: "https://app.example.com", ...workerHeaders },
     });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
   });
 
   it("does not reflect non-matching origin", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { Origin: "https://other.com" },
+      headers: { Origin: "https://other.com", ...workerHeaders },
     });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
   it("does not reflect loopback when explicit origin is set", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { Origin: "http://localhost:4000" },
+      headers: { Origin: "http://localhost:4000", ...workerHeaders },
     });
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
@@ -316,7 +320,7 @@ describe("HTTP Server - handler error", () => {
   });
 
   it("returns 500 when handler throws", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/status`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/status`, { headers: workerHeaders });
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toBe("Internal server error");
@@ -344,7 +348,7 @@ describe("HTTP Server - tenant isolation via x-tenant-id", () => {
   });
 
   it("uses default tenant when x-tenant-id header is absent", async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/flows`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/flows`, { headers: workerHeaders });
     expect(res.status).toBe(200);
     const flows = await res.json();
     expect(Array.isArray(flows)).toBe(true);
@@ -352,7 +356,7 @@ describe("HTTP Server - tenant isolation via x-tenant-id", () => {
 
   it("returns empty flows for a different tenant", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/flows`, {
-      headers: { "x-tenant-id": "other-tenant" },
+      headers: { "x-tenant-id": "other-tenant", ...workerHeaders },
     });
     expect(res.status).toBe(200);
     const flows = await res.json();
@@ -361,7 +365,7 @@ describe("HTTP Server - tenant isolation via x-tenant-id", () => {
 
   it("status works for a different tenant", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers: { "x-tenant-id": "other-tenant" },
+      headers: { "x-tenant-id": "other-tenant", ...workerHeaders },
     });
     expect(res.status).toBe(200);
     const body = await res.json();

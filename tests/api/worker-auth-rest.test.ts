@@ -113,18 +113,18 @@ describe("REST worker auth", () => {
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/entities remains open (no auth required)", async () => {
+  it("GET /api/entities returns 401 without token", async () => {
     const res = await request(port, "GET", "/api/entities?flow=test&state=open");
-    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/flows remains open (no auth required)", async () => {
+  it("GET /api/flows returns 401 without token", async () => {
     const res = await request(port, "GET", "/api/flows");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/status remains open (no auth required)", async () => {
+  it("GET /api/status returns 401 without token", async () => {
     const res = await request(port, "GET", "/api/status");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 });

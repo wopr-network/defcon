@@ -85,7 +85,9 @@ describe("WebSocket integration with HTTP server", () => {
 	});
 
 	it("HTTP routes still work with WS attached", async () => {
-		const res = await fetch(`http://127.0.0.1:${port}/api/status`);
+		const res = await fetch(`http://127.0.0.1:${port}/api/status`, {
+			headers: { Authorization: "Bearer worker-tok" },
+		});
 		expect(res.status).toBe(200);
 	});
 
