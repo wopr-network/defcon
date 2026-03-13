@@ -5,6 +5,7 @@
  * Serves norad (dashboard), workers (claim/report), and admin tooling.
  */
 import { serve } from "@hono/node-server";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
@@ -346,9 +347,11 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
 
   // ─── Rate limiting ───
 
-  const rlWindowMs = deps.rateLimits?.windowMs ?? 60_000;
-  const rlWriteMax = deps.rateLimits?.writeMaxRequests ?? 30;
-  const rlWorkerMax = deps.rateLimits?.workerMaxRequests ?? 120;
+  const RL_MIN_WINDOW_MS = 100;
+  const RL_MIN_REQUESTS = 1;
+  const rlWindowMs = Math.max(deps.rateLimits?.windowMs ?? 60_000, RL_MIN_WINDOW_MS);
+  const rlWriteMax = Math.max(deps.rateLimits?.writeMaxRequests ?? 30, RL_MIN_REQUESTS);
+  const rlWorkerMax = Math.max(deps.rateLimits?.workerMaxRequests ?? 120, RL_MIN_REQUESTS);
   const RL_MAX_ENTRIES = 10_000;
 
   interface RateLimitEntry {
@@ -364,14 +367,18 @@ export function createHonoApp(deps: HonoServerDeps): Hono {
 
     return async (c, next) => {
       const now = Date.now();
-      const forwarded = c.req.header("x-forwarded-for");
-      const ip = forwarded?.split(",")[0]?.trim() || "unknown";
+      // Use remote address as primary key; x-forwarded-for is not trusted without proxy config
+      const connInfo = getConnInfo(c);
+      const ip = connInfo.remote.address ?? "unknown";
 
       let entry = buckets.get(ip);
       if (!entry) {
-        // Evict all entries if map grows too large to prevent unbounded memory growth
+        // LRU eviction: remove the oldest entry instead of clearing all counters
         if (buckets.size >= RL_MAX_ENTRIES) {
-          buckets.clear();
+          const oldestKey = buckets.keys().next().value;
+          if (oldestKey !== undefined) {
+            buckets.delete(oldestKey);
+          }
         }
         entry = { tokens: maxRequests, lastRefill: now };
         buckets.set(ip, entry);

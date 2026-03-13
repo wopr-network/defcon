@@ -59,13 +59,12 @@ async function startTestServer(deps: HonoServerDeps): Promise<{ server: http.Ser
 
 const workerHeaders = { Authorization: "Bearer test-worker-token" };
 
-describe("Rate limiting", () => {
+describe("Rate limiting — allows requests under limit", () => {
   let deps: Awaited<ReturnType<typeof makeTestDeps>>;
   let server: http.Server;
   let port: number;
 
   beforeAll(async () => {
-    // Very low limits for testing: 3 requests per 60s window
     deps = await makeTestDeps({
       writeMaxRequests: 3,
       workerMaxRequests: 3,
@@ -83,7 +82,7 @@ describe("Rate limiting", () => {
   });
 
   it("allows requests under the rate limit", async () => {
-    // First 3 requests should succeed (not 429)
+    // 3 requests should all succeed with a fresh server (budget = 3)
     for (let i = 0; i < 3; i++) {
       const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
         method: "POST",
@@ -93,9 +92,41 @@ describe("Rate limiting", () => {
       expect(res.status).not.toBe(429);
     }
   });
+});
+
+describe("Rate limiting — 429 enforcement", () => {
+  let deps: Awaited<ReturnType<typeof makeTestDeps>>;
+  let server: http.Server;
+  let port: number;
+
+  beforeAll(async () => {
+    // Fresh server per describe so each test starts with a clean bucket
+    deps = await makeTestDeps({
+      writeMaxRequests: 3,
+      workerMaxRequests: 3,
+      windowMs: 60_000,
+    });
+    const result = await startTestServer(deps);
+    server = result.server;
+    port = result.port;
+  });
+
+  afterAll(async () => {
+    server.close();
+    await deps.stopReaper();
+    await deps.closeDb();
+  });
 
   it("returns 429 when rate limit is exceeded on POST /api/entities", async () => {
-    // The 4th request (after 3 in the previous test) should be rate-limited
+    // Exhaust the full budget (3) within this test, then assert the 4th is rejected
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...workerHeaders },
+        body: JSON.stringify({ flow: "nonexistent" }),
+      });
+      expect(res.status).not.toBe(429);
+    }
     const res = await fetch(`http://127.0.0.1:${port}/api/entities`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...workerHeaders },
