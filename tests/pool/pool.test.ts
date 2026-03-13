@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "../../src/pool/pool.js";
 
 describe("Pool", () => {
@@ -118,13 +118,21 @@ describe("Pool", () => {
   });
 
   describe("heartbeat", () => {
-    it("updates lastHeartbeat timestamp", async () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("updates lastHeartbeat timestamp", () => {
       const pool = new Pool(1);
       const slot = pool.allocate("s1", "w1", "eng", "e1", "p")!;
       const before = slot.lastHeartbeat;
-      await new Promise<void>((r) => setTimeout(r, 1));
+      vi.advanceTimersByTime(10);
       pool.heartbeat("s1");
-      expect(slot.lastHeartbeat).toBeGreaterThanOrEqual(before);
+      expect(slot.lastHeartbeat).toBeGreaterThan(before);
     });
 
     it("is a no-op for unknown slotId (does not throw)", () => {
@@ -134,6 +142,14 @@ describe("Pool", () => {
   });
 
   describe("complete", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it("sets result and transitions state to reporting", () => {
       const pool = new Pool(1);
       pool.allocate("s1", "w1", "eng", "e1", "p");
@@ -144,13 +160,13 @@ describe("Pool", () => {
       expect(slots[0].result).toEqual(result);
     });
 
-    it("updates lastHeartbeat on complete", async () => {
+    it("updates lastHeartbeat on complete", () => {
       const pool = new Pool(1);
       const slot = pool.allocate("s1", "w1", "eng", "e1", "p")!;
       const before = slot.lastHeartbeat;
-      await new Promise<void>((r) => setTimeout(r, 1));
+      vi.advanceTimersByTime(10);
       pool.complete("s1", { signal: "done", artifacts: {}, exitCode: 0 });
-      expect(slot.lastHeartbeat).toBeGreaterThanOrEqual(before);
+      expect(slot.lastHeartbeat).toBeGreaterThan(before);
     });
 
     it("throws on unknown slotId", () => {
