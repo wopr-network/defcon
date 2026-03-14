@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
-import { InternalError } from "../../errors.js";
+import { ConflictError, InternalError } from "../../errors.js";
 import type { CreateGateInput, Gate, GateResult, IGateRepository } from "../interfaces.js";
+import { isUniqueViolation } from "./is-unique-violation.js";
 import { gateDefinitions, gateResults } from "./schema.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: cross-driver compat (postgres-js + PGlite)
@@ -58,7 +59,14 @@ export class DrizzleGateRepository implements IGateRepository {
       timeoutPrompt: gate.timeoutPrompt ?? null,
       outcomes: gate.outcomes ?? null,
     };
-    await this.db.insert(gateDefinitions).values(values);
+    try {
+      await this.db.insert(gateDefinitions).values(values);
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError(`Gate with name "${gate.name}" already exists`);
+      }
+      throw err;
+    }
     const [row] = await this.db.select().from(gateDefinitions).where(eq(gateDefinitions.id, id)).limit(1);
     if (!row) throw new InternalError(`Gate ${id} not found after insert`);
     return toGate(row);

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import type { DomainEvent, IDomainEventRepository } from "../interfaces.js";
 import type { Db } from "./db-type.js";
+import { isUniqueViolation } from "./is-unique-violation.js";
 import { domainEvents } from "./schema.js";
 
 export class DrizzleDomainEventRepository implements IDomainEventRepository {
@@ -61,7 +62,7 @@ export class DrizzleDomainEventRepository implements IDomainEventRepository {
         return { id, type, entityId, payload, sequence: newSequence, emittedAt };
       });
     } catch (err: unknown) {
-      if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "23505") {
+      if (isUniqueViolation(err)) {
         return null;
       }
       throw err;

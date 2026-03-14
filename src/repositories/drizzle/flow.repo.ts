@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { NotFoundError } from "../../errors.js";
+import { ConflictError, NotFoundError } from "../../errors.js";
 import type {
   CreateFlowInput,
   CreateStateInput,
@@ -16,6 +16,7 @@ import type {
   UpdateStateInput,
   UpdateTransitionInput,
 } from "../interfaces.js";
+import { isUniqueViolation } from "./is-unique-violation.js";
 import { flowDefinitions, flowVersions, stateDefinitions, transitionRules } from "./schema.js";
 
 function toDate(v: number | null | undefined): Date | null {
@@ -129,7 +130,14 @@ export class DrizzleFlowRepository implements IFlowRepository {
       createdAt: now,
       updatedAt: now,
     };
-    await this.db.insert(flowDefinitions).values(row);
+    try {
+      await this.db.insert(flowDefinitions).values(row);
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError(`Flow with name "${input.name}" already exists`);
+      }
+      throw err;
+    }
     return rowToFlow(row, [], []);
   }
 
@@ -309,10 +317,17 @@ export class DrizzleFlowRepository implements IFlowRepository {
       retryAfterMs: state.retryAfterMs ?? null,
       meta: (state.meta ?? null) as Record<string, unknown> | null,
     };
-    await this.db.transaction(async (tx: Db) => {
-      await tx.insert(stateDefinitions).values(row);
-      await tx.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, flowId));
-    });
+    try {
+      await this.db.transaction(async (tx: Db) => {
+        await tx.insert(stateDefinitions).values(row);
+        await tx.update(flowDefinitions).set({ updatedAt: Date.now() }).where(eq(flowDefinitions.id, flowId));
+      });
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError(`State "${state.name}" already exists in flow ${flowId}`);
+      }
+      throw err;
+    }
     return rowToState(row);
   }
 
@@ -420,32 +435,40 @@ export class DrizzleFlowRepository implements IFlowRepository {
       transitions: flow.transitions,
     };
 
-    const nextVersion = await this.db.transaction(async (tx: Db) => {
-      const existing = await tx
-        .select()
-        .from(flowVersions)
-        .where(and(eq(flowVersions.flowId, flowId), eq(flowVersions.tenantId, this.tenantId)));
-      const maxVersion = existing.reduce((max: number, r: { version: number }) => Math.max(max, r.version), 0);
-      const version = maxVersion + 1;
+    let nextVersion: number;
+    try {
+      nextVersion = await this.db.transaction(async (tx: Db) => {
+        const existing = await tx
+          .select()
+          .from(flowVersions)
+          .where(and(eq(flowVersions.flowId, flowId), eq(flowVersions.tenantId, this.tenantId)));
+        const maxVersion = existing.reduce((max: number, r: { version: number }) => Math.max(max, r.version), 0);
+        const version = maxVersion + 1;
 
-      await tx.insert(flowVersions).values({
-        id,
-        tenantId: this.tenantId,
-        flowId,
-        version,
-        snapshot: snapshotData as Record<string, unknown>,
-        changedBy: null,
-        changeReason: null,
-        createdAt: now,
+        await tx.insert(flowVersions).values({
+          id,
+          tenantId: this.tenantId,
+          flowId,
+          version,
+          snapshot: snapshotData as Record<string, unknown>,
+          changedBy: null,
+          changeReason: null,
+          createdAt: now,
+        });
+
+        await tx
+          .update(flowDefinitions)
+          .set({ version: version + 1, updatedAt: now })
+          .where(eq(flowDefinitions.id, flowId));
+
+        return version;
       });
-
-      await tx
-        .update(flowDefinitions)
-        .set({ version: version + 1, updatedAt: now })
-        .where(eq(flowDefinitions.id, flowId));
-
-      return version;
-    });
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError(`Version already exists for flow ${flowId}`);
+      }
+      throw err;
+    }
 
     return {
       id,
