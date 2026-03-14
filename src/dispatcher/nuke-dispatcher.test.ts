@@ -18,7 +18,6 @@ describe("NukeDispatcher", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    vi.restoreAllMocks();
   });
 
   /** Make execFile call its callback with an error — short-circuits launchContainer. */
@@ -60,7 +59,11 @@ describe("NukeDispatcher", () => {
       // Image is the last element of the docker run args
       expect(dockerArgs[dockerArgs.length - 1]).toBe("custom-image:latest");
     } finally {
-      process.env.NUKE_IMAGE = orig;
+      if (orig === undefined) {
+        delete process.env.NUKE_IMAGE;
+      } else {
+        process.env.NUKE_IMAGE = orig;
+      }
     }
   });
 
