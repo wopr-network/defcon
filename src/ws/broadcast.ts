@@ -1,6 +1,6 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import type http from "node:http";
 import { type WebSocket, WebSocketServer } from "ws";
+import { extractBearerToken, tokensMatch } from "../auth.js";
 import type { Engine } from "../engine/engine.js";
 import type { EngineEvent, IEventBusAdapter } from "../engine/event-types.js";
 
@@ -54,18 +54,9 @@ export class WebSocketBroadcaster implements IEventBusAdapter {
   private authenticate(req: http.IncomingMessage): boolean {
     // Require Authorization header — query-string tokens are rejected
     // to prevent token exposure in server logs and browser history.
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return false;
-    const lower = authHeader.toLowerCase();
-    if (!lower.startsWith("bearer ")) return false;
-    const token = authHeader.slice(7).trim();
-    return token !== "" && this.tokenMatches(token);
-  }
-
-  private tokenMatches(callerToken: string): boolean {
-    const hashA = createHash("sha256").update(this.adminToken).digest();
-    const hashB = createHash("sha256").update(callerToken).digest();
-    return timingSafeEqual(hashA, hashB);
+    const callerToken = extractBearerToken(req.headers.authorization);
+    if (!callerToken) return false;
+    return tokensMatch(this.adminToken, callerToken);
   }
 
   private async sendSnapshot(ws: WebSocket): Promise<void> {
