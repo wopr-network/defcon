@@ -779,7 +779,7 @@ export class Engine {
       if (entity.state !== pending.stage) continue;
       const entityClaimToken = worker_id ?? `agent:${role}`;
 
-      // CAS guard: atomically append an invocation.claimed event using optimistic concurrency.
+      // CAS guard: atomically append an invocation.claim_attempted event using optimistic concurrency.
       // appendCas reads current sequence inside its own transaction — no external hint needed.
       // Only one writer wins the unique (entityId, sequence) constraint — losers move to the next candidate.
       if (this.domainEventRepo) {

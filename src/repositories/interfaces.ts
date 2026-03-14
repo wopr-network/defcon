@@ -474,8 +474,11 @@ export interface IDomainEventRepository {
   /** Get the current max sequence number for an entity (0 if no events exist). */
   getLastSequence(entityId: string): Promise<number>;
 
-  /** Append a domain event only if the entity's current max sequence equals expectedSequence.
-   *  When expectedSequence is omitted, reads current sequence inside the transaction (no external hint needed).
+  /** Append a domain event with optimistic concurrency control.
+   *  - When expectedSequence is provided: acts as a CAS check — only appends if the entity's
+   *    current max sequence equals expectedSequence; returns null if another writer has advanced it.
+   *  - When expectedSequence is undefined: auto-reads the current sequence inside the transaction
+   *    and writes at seq+1; sequential callers each succeed with incrementing sequences.
    *  Returns the event on success, or null if another writer won (unique constraint violation). */
   appendCas(
     type: string,

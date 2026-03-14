@@ -72,7 +72,7 @@ describe("DrizzleDomainEventRepository CAS", () => {
     expect(result!.type).toBe("invocation.claimed");
   });
 
-  it("appendCas with undefined expectedSequence still loses on concurrent race", async () => {
+  it("appendCas with undefined expectedSequence: sequential calls both succeed with incrementing sequences", async () => {
     // Two sequential auto-read appends — each reads current seq inside its own transaction
     const r1 = await repo.appendCas("invocation.claimed", "e1", { agentId: "agent:a" }, undefined);
     const r2 = await repo.appendCas("invocation.claimed", "e1", { agentId: "agent:b" }, undefined);
