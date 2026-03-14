@@ -31,7 +31,7 @@ describe("HonoSseAdapter", () => {
       entityId: "e1",
       flowId: "f1",
       payload: {},
-      emittedAt: new Date("2026-01-01"),
+      emittedAt: new Date(),
     });
 
     expect(ctrl.chunks.length).toBe(1);
@@ -64,7 +64,7 @@ describe("HonoSseAdapter", () => {
       entityId: "e1",
       flowId: "f1",
       payload: {},
-      emittedAt: new Date("2026-01-01"),
+      emittedAt: new Date(),
     });
 
     // Controller should be removed after error

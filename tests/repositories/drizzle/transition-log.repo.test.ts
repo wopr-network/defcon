@@ -91,9 +91,10 @@ describe("DrizzleTransitionLogRepository", () => {
 
   describe("historyFor", () => {
     it("returns history ordered by timestamp ascending", async () => {
-      const t1 = new Date("2026-01-01T00:00:00Z");
-      const t2 = new Date("2026-01-01T01:00:00Z");
-      const t3 = new Date("2026-01-01T02:00:00Z");
+      const now = Date.now();
+      const t1 = new Date(now - 3 * 3_600_000);
+      const t2 = new Date(now - 2 * 3_600_000);
+      const t3 = new Date(now - 1 * 3_600_000);
 
       // Insert out of order to verify sorting
       await repo.record({
@@ -189,7 +190,7 @@ describe("DrizzleTransitionLogRepository", () => {
     });
 
     it("round-trips timestamp through epoch storage", async () => {
-      const ts = new Date("2026-03-07T12:34:56.000Z");
+      const ts = new Date(Date.now() - 86_400_000);
       await repo.record({
         entityId: entityId1,
         fromState: "a",

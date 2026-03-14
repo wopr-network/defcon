@@ -690,7 +690,7 @@ describe("MCP tool handlers", () => {
   // Finding 1 (round 4): flow.report must clear gate_failures on successful transition
   it("flow.report clears gate_failures after successful transition", async () => {
     deps.entities.get = async () =>
-      mockEntity({ artifacts: { gate_failures: [{ gateId: "g-1", failedAt: "2024-01-01" }], other: "preserved" } });
+      mockEntity({ artifacts: { gate_failures: [{ gateId: "g-1", failedAt: new Date(Date.now() - 86_400_000).toISOString() }], other: "preserved" } });
     const updateArtifactsCalls: Array<Record<string, unknown>> = [];
     deps.entities.updateArtifacts = async (_id, artifacts) => {
       updateArtifactsCalls.push(artifacts as Record<string, unknown>);
