@@ -6,6 +6,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { DEFAULT_TIMEOUT_PROMPT } from "../engine/constants.js";
 import type { Engine } from "../engine/engine.js";
 import { isTerminal } from "../engine/state-machine.js";
+import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import type { Logger } from "../logger.js";
 import { consoleLogger } from "../logger.js";
 import type {
@@ -39,6 +40,7 @@ import {
   AdminWorkerDrainSchema,
 } from "./admin-schemas.js";
 import { handleFlowClaim } from "./handlers/flow.js";
+import { emitDefinitionChanged, errorResult, jsonResult, validateInput } from "./mcp-helpers.js";
 import {
   FlowFailSchema,
   FlowGetPromptSchema,
@@ -670,26 +672,11 @@ export async function callToolHandler(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const { NotFoundError, ValidationError, ConflictError } = await import("../errors.js");
     if (err instanceof NotFoundError) return errorResult(message, "NOT_FOUND");
     if (err instanceof ValidationError) return errorResult(message, "VALIDATION");
     if (err instanceof ConflictError) return errorResult(message, "CONFLICT");
     return errorResult(message);
   }
-}
-
-function jsonResult(data: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data) }],
-  };
-}
-
-function errorResult(message: string, errorCode?: string) {
-  return {
-    content: [{ type: "text" as const, text: message }],
-    isError: true,
-    ...(errorCode !== undefined && { errorCode }),
-  };
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -1171,28 +1158,6 @@ export async function startStdioServer(deps: McpServerDeps, opts?: McpServerOpts
   const server = createMcpServer(deps, opts);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-}
-
-// ─── Admin Helpers ───
-
-function validateInput<T>(
-  schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: { issues: unknown[] } } },
-  args: Record<string, unknown>,
-): { ok: true; data: T } | { ok: false; result: ReturnType<typeof errorResult> } {
-  const parsed = schema.safeParse(args);
-  if (!parsed.success) {
-    return { ok: false, result: errorResult(`Validation error: ${JSON.stringify(parsed.error?.issues)}`) };
-  }
-  return { ok: true, data: parsed.data as T };
-}
-
-function emitDefinitionChanged(
-  eventRepo: IEventRepository,
-  flowId: string | null,
-  tool: string,
-  payload: Record<string, unknown>,
-) {
-  void eventRepo.emitDefinitionChanged(flowId, tool, payload);
 }
 
 // ─── Admin Tool Handlers ───

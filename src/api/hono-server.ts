@@ -78,7 +78,7 @@ export class HonoSseAdapter implements IEventBusAdapter {
 
 // ─── Unwrap MCP tool result → { status, body } ───
 
-function mcpResultToResponse(result: {
+export function mcpResultToResponse(result: {
   content: { type: string; text: string }[];
   isError?: boolean;
   errorCode?: string;
@@ -103,7 +103,6 @@ function mcpResultToResponse(result: {
     if (result.errorCode === "NOT_FOUND") return { status: 404, body: { error: msgStr } };
     if (result.errorCode === "VALIDATION") return { status: 400, body: { error: msgStr } };
     if (result.errorCode === "CONFLICT") return { status: 409, body: { error: msgStr } };
-    if (result.errorCode === "UNAUTHORIZED") return { status: 401, body: { error: msgStr } };
 
     // Fallback: string matching for handler-level errorResult() calls that don't throw
     if (msgStr.includes("not found") || msgStr.includes("Not found")) return { status: 404, body: { error: msgStr } };

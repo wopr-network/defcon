@@ -1,46 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mcpResultToResponse } from "./hono-server.js";
 
-// Test the mcpResultToResponse logic directly by reproducing the function
-// (it is not exported from hono-server.ts, so we test the behavior inline)
 describe("mcpResultToResponse error code routing", () => {
-  function mcpResultToResponse(result: {
-    content: { type: string; text: string }[];
-    isError?: boolean;
-    errorCode?: string;
-  }): { status: number; body: unknown } {
-    const text = result.content[0]?.text ?? "";
-    let body: unknown;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = { message: text };
-    }
-
-    if (result.isError) {
-      const msg =
-        typeof body === "object" && body !== null && "message" in body
-          ? (body as Record<string, unknown>).message
-          : text;
-      const msgStr = String(msg);
-
-      // Prefer typed error codes
-      if (result.errorCode === "NOT_FOUND") return { status: 404, body: { error: msgStr } };
-      if (result.errorCode === "VALIDATION") return { status: 400, body: { error: msgStr } };
-      if (result.errorCode === "CONFLICT") return { status: 409, body: { error: msgStr } };
-      if (result.errorCode === "UNAUTHORIZED") return { status: 401, body: { error: msgStr } };
-
-      // Fallback: string matching
-      if (msgStr.includes("not found") || msgStr.includes("Not found")) return { status: 404, body: { error: msgStr } };
-      if (msgStr.includes("Unauthorized")) return { status: 401, body: { error: msgStr } };
-      if (msgStr.includes("Validation error")) return { status: 400, body: { error: msgStr } };
-      if (msgStr.includes("No active invocation")) return { status: 409, body: { error: msgStr } };
-      return { status: 500, body: { error: msgStr } };
-    }
-
-    if (body === null) return { status: 204, body: null };
-    return { status: 200, body };
-  }
-
   it("returns 404 when errorCode is NOT_FOUND regardless of message text", () => {
     const result = mcpResultToResponse({
       content: [{ type: "text", text: "Entity xyz does not exist" }],
@@ -68,11 +29,10 @@ describe("mcpResultToResponse error code routing", () => {
     expect(result.status).toBe(409);
   });
 
-  it("returns 401 when errorCode is UNAUTHORIZED", () => {
+  it("returns 401 via string matching when message contains Unauthorized", () => {
     const result = mcpResultToResponse({
-      content: [{ type: "text", text: "access denied" }],
+      content: [{ type: "text", text: "Unauthorized: worker tools require authentication." }],
       isError: true,
-      errorCode: "UNAUTHORIZED",
     });
     expect(result.status).toBe(401);
   });
