@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Dispatcher, WorkerResult } from "../dispatcher/types.js";
+import { logger } from "../logger.js";
 import { Pool } from "../pool/pool.js";
 import type { IEntityActivityRepo } from "../radar-db/repos/i-entity-activity-repo.js";
 import { RunLoop } from "./run-loop.js";
@@ -243,5 +244,42 @@ describe("RunLoop — multi-discipline routing", () => {
     const roles = claimCalls.map((c) => (c[0] as { role: string }).role);
     expect(roles).toContain("engineering");
     expect(roles).toContain("devops");
+  });
+});
+
+describe("RunLoop — crash report logging", () => {
+  it("logs warning when crash report fails after slot allocation failure", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => logger);
+
+    const firstClaim = {
+      entity_id: "e-crash",
+      prompt: "Do the work",
+      flow: "engineering",
+      entity_type: "issue",
+    };
+
+    const reportError = new Error("DB connection lost");
+    const silo = {
+      claim: vi.fn().mockResolvedValueOnce(firstClaim).mockResolvedValue({ retry_after_ms: 50 }),
+      report: vi.fn().mockRejectedValueOnce(reportError),
+    } as unknown as import("../engine/flow-engine-interface.js").IFlowEngine;
+
+    // Pool of 0 capacity so allocate() returns undefined → triggers the crash report path
+    const pool = new Pool(0);
+    const dispatcher = makeDispatcher({ signal: "done", artifacts: {}, exitCode: 0 });
+    const config = makeConfig({ pool, engine: silo, dispatcher });
+    const loop = new RunLoop(config);
+    loop.start();
+
+    // Wait for the report to have been attempted
+    await vi.waitFor(() => expect(silo.report).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await loop.stop();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[run-loop] failed to report crash signal",
+      expect.objectContaining({ error: "DB connection lost" }),
+    );
+
+    warnSpy.mockRestore();
   });
 });
