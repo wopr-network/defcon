@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { getTableName } from "drizzle-orm";
 import * as schema from "../../../src/repositories/drizzle/schema.js";
-import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
+import { createTestDb } from "../../helpers/pg-test-db.js";
 
 describe("schema tables exist", () => {
   it("exports flowDefinitions table", () => {
