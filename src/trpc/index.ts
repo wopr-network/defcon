@@ -1,23 +1,14 @@
 /**
- * Root tRPC router composing flow, entity, and github sub-routers.
+ * Root tRPC router for holyship.
  *
- * Note: This module uses a minimal tRPC-like pattern. When @trpc/server is
- * added as a dependency, swap to the real initTRPC.create() call.
+ * Composes platform-core procedures (billing, profile, settings, org)
+ * with holyship-specific procedures (engine status, entity ops).
  */
 
-import { entityRouter } from "./routers/entity.js";
-import { flowRouter } from "./routers/flow.js";
-import { githubRouter } from "./routers/github.js";
+import { publicProcedure, router } from "@wopr-network/platform-core/trpc";
 
-export { flowRouter, entityRouter, githubRouter };
+export const appRouter = router({
+  health: publicProcedure.query(() => ({ status: "ok" })),
+});
 
-/** Compose all routers into a single appRouter shape. */
-export function createAppRouter() {
-  return {
-    flow: flowRouter,
-    entity: entityRouter,
-    github: githubRouter,
-  };
-}
-
-export type AppRouter = ReturnType<typeof createAppRouter>;
+export type AppRouter = typeof appRouter;

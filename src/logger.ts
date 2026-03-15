@@ -1,7 +1,4 @@
-import { accessSync, constants } from "node:fs";
-import { dirname } from "node:path";
-import winston from "winston";
-import DailyRotateFile from "winston-daily-rotate-file";
+import pino from "pino";
 
 export interface Logger {
   error(msg: string, ...args: unknown[]): void;
@@ -24,44 +21,32 @@ export const noopLogger: Logger = {
   debug: () => {},
 };
 
-const logFile = process.env.HOLYSHIP_LOG_FILE ?? "/data/holyship.log";
+const _pino = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
-const consoleTransport = new winston.transports.Console({
-  stderrLevels: ["error", "warn", "info", "http", "verbose", "debug", "silly"],
-  format: winston.format.combine(
-    winston.format.colorize(),
-    winston.format.printf(({ timestamp, level, message, ...meta }) => {
-      let metaStr = "";
-      if (Object.keys(meta).length) {
-        try {
-          metaStr = ` ${JSON.stringify(meta)}`;
-        } catch {
-          metaStr = ` [unserializable meta]`;
-        }
-      }
-      return `${String(timestamp)} ${level}: ${String(message)}${metaStr}`;
-    }),
-  ),
-});
-
-const transports: winston.transport[] = [consoleTransport];
-
-try {
-  accessSync(dirname(logFile), constants.W_OK);
-  const fileTransport = new DailyRotateFile({
-    filename: logFile,
-    datePattern: "YYYY-MM-DD",
-    maxFiles: "7d",
-    maxSize: "50m",
-  });
-  fileTransport.on("error", (_err: Error) => {});
-  transports.push(fileTransport);
-} catch {
-  // Log directory not writable — console-only logging
+function toMeta(args: unknown[]): Record<string, unknown> | undefined {
+  if (args.length === 0) return undefined;
+  if (args.length === 1 && typeof args[0] === "object" && args[0] !== null) {
+    return args[0] as Record<string, unknown>;
+  }
+  return { args };
 }
 
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL ?? "info",
-  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
-  transports,
-});
+/** Logger instance backed by pino, conforming to the Logger interface. */
+export const logger: Logger = {
+  error: (msg, ...args) => {
+    const meta = toMeta(args);
+    meta ? _pino.error(meta, msg) : _pino.error(msg);
+  },
+  warn: (msg, ...args) => {
+    const meta = toMeta(args);
+    meta ? _pino.warn(meta, msg) : _pino.warn(msg);
+  },
+  info: (msg, ...args) => {
+    const meta = toMeta(args);
+    meta ? _pino.info(meta, msg) : _pino.info(msg);
+  },
+  debug: (msg, ...args) => {
+    const meta = toMeta(args);
+    meta ? _pino.debug(meta, msg) : _pino.debug(msg);
+  },
+};

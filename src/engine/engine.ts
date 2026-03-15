@@ -89,6 +89,8 @@ export interface EngineDeps {
   domainEvents?: IDomainEventRepository;
   /** Reserved for future adapter registry support. */
   adapterRegistry?: null;
+  /** Handler for primitive gate operations (e.g. vcs.ci_status). */
+  primitiveOpHandler?: import("./gate-evaluator.js").PrimitiveOpHandler | null;
 }
 
 export class Engine {
@@ -106,6 +108,7 @@ export class Engine {
   private readonly repoFactory: ((txDb: any) => TransactionRepos) | null;
   private readonly domainEventRepo: IDomainEventRepository | null;
   private readonly adapterRegistry: null;
+  private readonly primitiveOpHandler: import("./gate-evaluator.js").PrimitiveOpHandler | null;
   private drainingWorkers = new Set<string>();
 
   constructor(deps: EngineDeps) {
@@ -121,6 +124,7 @@ export class Engine {
     this.repoFactory = deps.repoFactory ?? null;
     this.domainEventRepo = deps.domainEvents ?? null;
     this.adapterRegistry = null;
+    this.primitiveOpHandler = deps.primitiveOpHandler ?? null;
   }
 
   drainWorker(workerId: string): void {
@@ -492,6 +496,7 @@ export class Engine {
       flow.gateTimeoutMs,
       flow,
       this.adapterRegistry,
+      this.primitiveOpHandler,
     );
 
     this.logger.debug(`[engine] gate "${gate.name}" result`, {

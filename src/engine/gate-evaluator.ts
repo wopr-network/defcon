@@ -18,6 +18,16 @@ export interface GateEvalResult {
   message?: string;
 }
 
+/**
+ * Handler for primitive gate operations (e.g. vcs.ci_status, issue_tracker.comment_exists).
+ * Returns { outcome, message } matching the gate's outcomes map.
+ */
+export type PrimitiveOpHandler = (
+  primitiveOp: string,
+  primitiveParams: Record<string, unknown>,
+  entity: Entity,
+) => Promise<{ outcome: string; message?: string }>;
+
 // Anchor path-traversal checks to the project root. realpathSync resolves symlinks
 // so the containment check works even when the project directory itself is a symlink.
 const PROJECT_ROOT = realpathSync(resolve(fileURLToPath(new URL("../..", import.meta.url))));
@@ -48,6 +58,7 @@ export async function evaluateGate(
   flowGateTimeoutMs?: number | null,
   _flow?: Flow | null,
   _adapterRegistry?: null,
+  primitiveOpHandler?: PrimitiveOpHandler | null,
 ): Promise<GateEvalResult> {
   const effectiveTimeout = resolveGateTimeout(gate.timeoutMs, flowGateTimeoutMs);
   let passed = false;
@@ -55,11 +66,37 @@ export async function evaluateGate(
   let timedOut = false;
 
   if (gate.type === "primitive") {
-    // Primitive gates are not supported without an adapter registry.
-    // Use GitHub-native primitive ops via src/github/primitive-ops.ts instead.
-    const result = { passed: false, timedOut: false, output: "Primitive gate type requires an adapter registry" };
-    await gateRepo.record(entity.id, gate.id, result.passed, result.output);
-    return result;
+    if (!gate.primitiveOp) {
+      const result = { passed: false, timedOut: false, output: "Gate primitiveOp is not configured" };
+      await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+      return result;
+    }
+    if (!primitiveOpHandler) {
+      const result = { passed: false, timedOut: false, output: "Primitive gate type requires a primitiveOpHandler" };
+      await gateRepo.record(entity.id, gate.id, result.passed, result.output);
+      return result;
+    }
+    try {
+      // Render Handlebars templates in primitiveParams
+      const hbs = (await import("./handlebars.js")).getHandlebars();
+      const renderedParams: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(gate.primitiveParams ?? {})) {
+        renderedParams[key] = typeof val === "string" ? hbs.compile(val)({ entity }) : val;
+      }
+      const opResult = await primitiveOpHandler(gate.primitiveOp, renderedParams, entity);
+      const outcome = opResult.outcome;
+      const message = opResult.message ?? "";
+      // Check if outcome maps to "proceed" in the gate's outcomes
+      const outcomeConfig = gate.outcomes?.[outcome];
+      passed = outcomeConfig?.proceed === true;
+      output = message;
+      await gateRepo.record(entity.id, gate.id, passed, output);
+      return { passed, timedOut: false, output, outcome, message };
+    } catch (err) {
+      const msg = `Primitive gate error: ${err instanceof Error ? err.message : String(err)}`;
+      await gateRepo.record(entity.id, gate.id, false, msg);
+      return { passed: false, timedOut: false, output: msg };
+    }
   } else if (gate.type === "command") {
     if (!gate.command) {
       return { passed: false, timedOut: false, output: "Gate command is not configured" };
@@ -257,6 +294,7 @@ export async function evaluateGateForAllRepos(
   flowGateTimeoutMs?: number | null,
   flow?: Flow | null,
   _adapterRegistry?: null,
+  primitiveOpHandler?: PrimitiveOpHandler | null,
   evalFn: (
     gate: Gate,
     entity: Entity,
@@ -264,13 +302,14 @@ export async function evaluateGateForAllRepos(
     timeout?: number | null,
     flow?: Flow | null,
     _adapterRegistry?: null,
+    primitiveOpHandler?: PrimitiveOpHandler | null,
   ) => Promise<GateEvalResult> = evaluateGate,
 ): Promise<GateEvalResult> {
   const prs = entity.artifacts?.prs;
 
   // No prs map — single evaluation (backwards compat, or non-PR gate like spec-posted)
   if (!prs || typeof prs !== "object" || Object.keys(prs as Record<string, unknown>).length === 0) {
-    return evalFn(gate, entity, gateRepo, flowGateTimeoutMs, flow, null);
+    return evalFn(gate, entity, gateRepo, flowGateTimeoutMs, flow, null, primitiveOpHandler);
   }
 
   const entries = Object.entries(prs as Record<string, string>);
@@ -295,7 +334,7 @@ export async function evaluateGateForAllRepos(
       },
     };
 
-    const result = await evalFn(gate, repoEntity, gateRepo, flowGateTimeoutMs, flow, null);
+    const result = await evalFn(gate, repoEntity, gateRepo, flowGateTimeoutMs, flow, null, primitiveOpHandler);
     results.push(result);
 
     // Short-circuit on first failure
