@@ -89,20 +89,31 @@ export class HolyshipperFleetManager implements IFleetManager {
     // Start the container
     await instance.start();
 
-    // Health check — instance.url is resolved from Docker inspection
-    const runnerUrl = instance.url;
-    await this.waitForReady(runnerUrl, botName);
-
-    // Inject credentials
-    await this.postCredentials(runnerUrl, config);
-
-    // Checkout repo(s)
-    if (config.owner && config.repo) {
-      await this.postCheckout(runnerUrl, config);
-    }
-
-    // Track for teardown
+    // Track immediately so teardown works if later steps fail
     this.instances.set(instance.containerId, instance);
+    const runnerUrl = instance.url;
+
+    try {
+      await this.waitForReady(runnerUrl, botName);
+
+      // Inject credentials
+      await this.postCredentials(runnerUrl, config);
+
+      // Checkout repo(s)
+      if (config.owner && config.repo) {
+        await this.postCheckout(runnerUrl, config);
+      }
+    } catch (err) {
+      // Clean up on mid-provision failure — don't leak containers
+      logger.error("[fleet] mid-provision failure, cleaning up", {
+        entityId,
+        containerId: instance.containerId.slice(0, 12),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await instance.remove().catch(() => {});
+      this.instances.delete(instance.containerId);
+      throw err;
+    }
 
     logger.info("[fleet] holyshipper container ready", {
       botName,
@@ -118,9 +129,9 @@ export class HolyshipperFleetManager implements IFleetManager {
     logger.info("[fleet] tearing down holyshipper container", { containerId: containerId.slice(0, 12) });
 
     const instance = this.instances.get(containerId);
+    this.instances.delete(containerId);
     if (instance) {
       await instance.remove();
-      this.instances.delete(containerId);
     } else {
       logger.warn("[fleet] no instance found for teardown — may already be gone", {
         containerId: containerId.slice(0, 12),
