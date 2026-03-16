@@ -332,6 +332,7 @@ export const holyshipperContainers = pgTable(
       .notNull()
       .references(() => entities.id),
     containerId: text("container_id"),
+    runnerUrl: text("runner_url"),
     status: text("status").notNull().default("pending"),
     provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
     tornDownAt: timestamp("torn_down_at", { withTimezone: true }),
