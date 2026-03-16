@@ -129,6 +129,8 @@ async function main() {
   const { setTrpcOrgMemberRepo } = await import("@wopr-network/platform-core/trpc");
   const orgMemberRepo = new DrizzleOrgMemberRepository(platformDb);
   setTrpcOrgMemberRepo(orgMemberRepo);
+  const { setAuthHelperOrgMemberRepo } = await import("./trpc/auth-helpers.js");
+  setAuthHelperOrgMemberRepo(orgMemberRepo);
   logger.info("Org tenant support initialized");
 
   // ─── 7. Gateway (OpenRouter metered proxy) ─────────────────────────
@@ -156,7 +158,99 @@ async function main() {
     logger.warn("OPENROUTER_API_KEY not set — inference gateway disabled");
   }
 
-  // ─── 8. tRPC ───────────────────────────────────────────────────────
+  // ─── 8. tRPC dependency wiring ──────────────────────────────────────
+  {
+    const { setBillingRouterDeps } = await import("./trpc/routers/billing.js");
+    const { setSettingsRouterDeps } = await import("./trpc/routers/settings.js");
+    const { setProfileRouterDeps } = await import("./trpc/routers/profile.js");
+    const { setOrgRouterDeps } = await import("./trpc/routers/org.js");
+
+    // Org router deps
+    const { BetterAuthUserRepository } = await import("@wopr-network/platform-core/db");
+    const { DrizzleOrgRepository, OrgService } = await import("@wopr-network/platform-core/tenancy");
+    const authUserRepo = new BetterAuthUserRepository(pool);
+    const orgRepo = new DrizzleOrgRepository(platformDb);
+    const orgService = new OrgService(orgRepo, orgMemberRepo, platformDb, { userRepo: authUserRepo });
+    setOrgRouterDeps({ orgService, authUserRepo, creditLedger });
+
+    // Billing deps (Stripe)
+    const stripeKey = config.STRIPE_SECRET_KEY;
+    if (stripeKey) {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeKey);
+
+      const { DrizzleTenantCustomerRepository, loadCreditPriceMap, StripePaymentProcessor } = await import(
+        "@wopr-network/platform-core/billing"
+      );
+      const { DrizzleMeterAggregator, DrizzleUsageSummaryRepository } = await import(
+        "@wopr-network/platform-core/metering"
+      );
+      const { DrizzleAutoTopupSettingsRepository } = await import("@wopr-network/platform-core/credits");
+      const { DrizzleSpendingLimitsRepository } = await import(
+        "@wopr-network/platform-core/monetization/drizzle-spending-limits-repository"
+      );
+      const { DrizzleDividendRepository } = await import(
+        "@wopr-network/platform-core/monetization/credits/dividend-repository"
+      );
+      const { DrizzleAffiliateRepository } = await import(
+        "@wopr-network/platform-core/monetization/affiliate/drizzle-affiliate-repository"
+      );
+
+      const tenantRepo = new DrizzleTenantCustomerRepository(platformDb);
+      const priceMap = loadCreditPriceMap();
+      const processor = new StripePaymentProcessor({
+        stripe,
+        tenantRepo,
+        webhookSecret: config.STRIPE_WEBHOOK_SECRET ?? "",
+        priceMap,
+        creditLedger,
+      });
+
+      const usageSummaryRepo = new DrizzleUsageSummaryRepository(platformDb);
+      const meterAggregator = new DrizzleMeterAggregator(usageSummaryRepo);
+      const autoTopupSettingsStore = new DrizzleAutoTopupSettingsRepository(platformDb);
+      const spendingLimitsRepo = new DrizzleSpendingLimitsRepository(platformDb);
+      const dividendRepo = new DrizzleDividendRepository(platformDb);
+      const affiliateRepo = new DrizzleAffiliateRepository(platformDb);
+
+      setBillingRouterDeps({
+        processor,
+        tenantRepo,
+        creditLedger,
+        meterAggregator,
+        priceMap,
+        autoTopupSettingsStore,
+        dividendRepo,
+        spendingLimitsRepo,
+        affiliateRepo,
+      });
+
+      // Re-wire org with billing deps
+      setOrgRouterDeps({ orgService, authUserRepo, creditLedger, meterAggregator, processor, priceMap });
+      logger.info("Billing tRPC router wired (Stripe + all repositories)");
+    } else {
+      logger.warn("STRIPE_SECRET_KEY not set — billing tRPC procedures will fail until configured");
+    }
+
+    // Settings deps
+    const { DrizzleNotificationPreferencesStore } = await import("@wopr-network/platform-core/email");
+    const notificationPrefsStore = new DrizzleNotificationPreferencesStore(platformDb);
+    setSettingsRouterDeps({
+      getNotificationPrefsStore: () => notificationPrefsStore,
+    });
+
+    // Profile deps
+    setProfileRouterDeps({
+      getUser: (userId) => authUserRepo.getUser(userId),
+      updateUser: (userId, data) => authUserRepo.updateUser(userId, data),
+      changePassword: (userId, currentPassword, newPassword) =>
+        authUserRepo.changePassword(userId, currentPassword, newPassword),
+    });
+
+    logger.info("tRPC router deps wired");
+  }
+
+  // ─── 8b. Mount tRPC ─────────────────────────────────────────────────
   async function createTRPCContext(req: Request): Promise<TRPCContext> {
     let user: AuthUser | undefined;
     let tenantId: string | undefined;
@@ -177,7 +271,6 @@ async function main() {
     return { user, tenantId };
   }
 
-  // Mount tRPC router
   const { appRouter } = await import("./trpc/index.js");
   app.all("/trpc/*", async (c) => {
     const response = await fetchRequestHandler({
