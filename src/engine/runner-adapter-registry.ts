@@ -9,7 +9,11 @@
  */
 
 import { logger } from "../logger.js";
-import type { PrimitiveOp, PrimitiveOpResult } from "../integrations/types.js";
+
+/** Primitive op identifier, e.g. "vcs.ci_status". Matches integrations/types.ts when available. */
+type PrimitiveOp = string;
+/** Result from a primitive op. Matches integrations/types.ts when available. */
+type PrimitiveOpResult = Record<string, unknown>;
 
 export interface RunnerRegistryConfig {
   /** Resolve the runner URL for an entity. Called with the integration ID. */
