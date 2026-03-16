@@ -2,8 +2,13 @@
  * Fleet management: provision and teardown holyshipper containers.
  */
 
+export interface ProvisionResult {
+  containerId: string;
+  runnerUrl: string;
+}
+
 export interface IFleetManager {
-  provision(entityId: string, config: ProvisionConfig): Promise<string>;
+  provision(entityId: string, config: ProvisionConfig): Promise<ProvisionResult>;
   teardown(containerId: string): Promise<void>;
 }
 
@@ -23,9 +28,12 @@ export interface ProvisionConfig {
 
 /**
  * Provision a holyshipper container for the given entity.
- * Returns the container ID.
+ * Returns the container ID and runner URL.
  */
-export async function provisionHolyshipper(fleetManager: IFleetManager, config: ProvisionConfig): Promise<string> {
+export async function provisionHolyshipper(
+  fleetManager: IFleetManager,
+  config: ProvisionConfig,
+): Promise<ProvisionResult> {
   return fleetManager.provision(config.entityId, config);
 }
 

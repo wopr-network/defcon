@@ -103,11 +103,12 @@ export class EntityLifecycleManager implements IEventBusAdapter {
 
     // Provision the container
     try {
-      const containerId = await this.fleetManager.provision(entityId, provisionConfig);
+      const { containerId, runnerUrl } = await this.fleetManager.provision(entityId, provisionConfig);
 
       logger.info("[lifecycle] container provisioned", {
         entityId,
         containerId,
+        runnerUrl,
         owner,
         repo,
         issueNumber,
@@ -117,6 +118,7 @@ export class EntityLifecycleManager implements IEventBusAdapter {
         .update(holyshipperContainers)
         .set({
           containerId,
+          runnerUrl,
           status: "running",
           provisionedAt: new Date(),
           updatedAt: new Date(),
