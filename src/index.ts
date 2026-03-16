@@ -266,6 +266,108 @@ async function main() {
   // Start reaper
   const stopReaper = engine.startReaper(30_000);
 
+  // ─── 9b. GitHub UI endpoints (before engine auth middleware) ────────
+  if (hasGitHubApp) {
+    app.get("/api/github/repos", async (c) => {
+      try {
+        let installations = await installationRepo.listByTenant(tenantId);
+        // Auto-sync from GitHub if DB has no installations
+        if (installations.length === 0) {
+          const { generateAppJwt } = await import("./github/token-generator.js");
+          const jwt = generateAppJwt(config.GITHUB_APP_ID as string, config.GITHUB_APP_PRIVATE_KEY as string);
+          const syncRes = await fetch("https://api.github.com/app/installations", {
+            headers: {
+              Authorization: `Bearer ${jwt}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+          });
+          if (syncRes.ok) {
+            const ghInstalls = (await syncRes.json()) as {
+              id: number;
+              account: { login: string; type: string };
+            }[];
+            for (const inst of ghInstalls) {
+              await installationRepo.upsert({
+                tenantId,
+                installationId: inst.id,
+                accountLogin: inst.account.login,
+                accountType: inst.account.type,
+                accessToken: null,
+                tokenExpiresAt: null,
+              });
+            }
+            installations = await installationRepo.listByTenant(tenantId);
+          }
+        }
+        if (installations.length === 0) {
+          return c.json({ repositories: [] });
+        }
+        const { token } = await getInstallationAccessToken(
+          config.GITHUB_APP_ID as string,
+          config.GITHUB_APP_PRIVATE_KEY as string,
+          installations[0].installationId,
+        );
+        const res = await fetch("https://api.github.com/installation/repositories?per_page=100", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        });
+        if (!res.ok) {
+          return c.json({ repositories: [], error: `GitHub API ${res.status}` }, 502);
+        }
+        const data = (await res.json()) as {
+          repositories: { id: number; full_name: string; name: string }[];
+        };
+        return c.json({ repositories: data.repositories });
+      } catch (err) {
+        logger.error("Failed to list repos", (err as Error).message);
+        return c.json({ repositories: [], error: (err as Error).message }, 500);
+      }
+    });
+
+    app.post("/api/github/sync-installations", async (c) => {
+      try {
+        const { generateAppJwt } = await import("./github/token-generator.js");
+        const jwt = generateAppJwt(config.GITHUB_APP_ID as string, config.GITHUB_APP_PRIVATE_KEY as string);
+        const res = await fetch("https://api.github.com/app/installations", {
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        });
+        if (!res.ok) {
+          return c.json({ error: `GitHub API ${res.status}` }, 502);
+        }
+        const installations = (await res.json()) as {
+          id: number;
+          account: { login: string; type: string };
+        }[];
+        let synced = 0;
+        for (const inst of installations) {
+          await installationRepo.upsert({
+            tenantId,
+            installationId: inst.id,
+            accountLogin: inst.account.login,
+            accountType: inst.account.type,
+            accessToken: null,
+            tokenExpiresAt: null,
+          });
+          synced++;
+        }
+        return c.json({ synced, installations: installations.length });
+      } catch (err) {
+        logger.error("Failed to sync installations", (err as Error).message);
+        return c.json({ error: (err as Error).message }, 500);
+      }
+    });
+
+    logger.info("GitHub UI endpoints mounted");
+  }
+
   // ─── 10. Engine REST routes (claim/report for holyshippers) ────────
   app.route(
     "/api",
@@ -331,108 +433,6 @@ async function main() {
       }),
     );
     logger.info("GitHub webhook routes mounted");
-  }
-
-  // ─── 12b. GitHub repos endpoint (for dashboard + ship-it UI) ────────
-  if (hasGitHubApp) {
-    app.get("/api/github/repos", async (c) => {
-      try {
-        let installations = await installationRepo.listByTenant(tenantId);
-        // Auto-sync from GitHub if DB has no installations
-        if (installations.length === 0) {
-          const { generateAppJwt } = await import("./github/token-generator.js");
-          const jwt = generateAppJwt(config.GITHUB_APP_ID as string, config.GITHUB_APP_PRIVATE_KEY as string);
-          const syncRes = await fetch("https://api.github.com/app/installations", {
-            headers: {
-              Authorization: `Bearer ${jwt}`,
-              Accept: "application/vnd.github+json",
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
-          });
-          if (syncRes.ok) {
-            const ghInstalls = (await syncRes.json()) as {
-              id: number;
-              account: { login: string; type: string };
-            }[];
-            for (const inst of ghInstalls) {
-              await installationRepo.upsert({
-                tenantId,
-                installationId: inst.id,
-                accountLogin: inst.account.login,
-                accountType: inst.account.type,
-                accessToken: null,
-                tokenExpiresAt: null,
-              });
-            }
-            installations = await installationRepo.listByTenant(tenantId);
-          }
-        }
-        if (installations.length === 0) {
-          return c.json({ repositories: [] });
-        }
-        const { token } = await getInstallationAccessToken(
-          config.GITHUB_APP_ID as string,
-          config.GITHUB_APP_PRIVATE_KEY as string,
-          installations[0].installationId,
-        );
-        const res = await fetch("https://api.github.com/installation/repositories?per_page=100", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        });
-        if (!res.ok) {
-          return c.json({ repositories: [], error: `GitHub API ${res.status}` }, 502);
-        }
-        const data = (await res.json()) as {
-          repositories: { id: number; full_name: string; name: string }[];
-        };
-        return c.json({ repositories: data.repositories });
-      } catch (err) {
-        logger.error("Failed to list repos", (err as Error).message);
-        return c.json({ repositories: [], error: (err as Error).message }, 500);
-      }
-    });
-    // Sync installations from GitHub API (no webhook needed)
-    app.post("/api/github/sync-installations", async (c) => {
-      try {
-        const { generateAppJwt } = await import("./github/token-generator.js");
-        const jwt = generateAppJwt(config.GITHUB_APP_ID as string, config.GITHUB_APP_PRIVATE_KEY as string);
-        const res = await fetch("https://api.github.com/app/installations", {
-          headers: {
-            Authorization: `Bearer ${jwt}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        });
-        if (!res.ok) {
-          return c.json({ error: `GitHub API ${res.status}` }, 502);
-        }
-        const installations = (await res.json()) as {
-          id: number;
-          account: { login: string; type: string };
-        }[];
-        let synced = 0;
-        for (const inst of installations) {
-          await installationRepo.upsert({
-            tenantId,
-            installationId: inst.id,
-            accountLogin: inst.account.login,
-            accountType: inst.account.type,
-            accessToken: null,
-            tokenExpiresAt: null,
-          });
-          synced++;
-        }
-        return c.json({ synced, installations: installations.length });
-      } catch (err) {
-        logger.error("Failed to sync installations", (err as Error).message);
-        return c.json({ error: (err as Error).message }, 500);
-      }
-    });
-
-    logger.info("GitHub repos endpoint mounted");
   }
 
   // ─── 13. Crypto payments (BTCPay + EVM watchers) ────────────────────
