@@ -6,10 +6,16 @@
  */
 
 import { Hono } from "hono";
+import {
+  type GapActualizationService,
+  GapAlreadyActualizedError,
+  GapNotFoundError,
+} from "../flows/gap-actualization-service.js";
 import type { InterrogationService } from "../flows/interrogation-service.js";
 
 export interface InterrogationRouteDeps {
   interrogationService: InterrogationService;
+  gapActualizationService?: GapActualizationService;
 }
 
 export function createInterrogationRoutes(deps: InterrogationRouteDeps): Hono {
@@ -86,6 +92,50 @@ export function createInterrogationRoutes(deps: InterrogationRouteDeps): Hono {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "Failed to link issue", detail: message }, 500);
+    }
+  });
+
+  // POST /repos/:owner/:repo/gaps/:gapId/create-issue — create GitHub issue from gap
+  app.post("/repos/:owner/:repo/gaps/:gapId/create-issue", async (c) => {
+    if (!deps.gapActualizationService) {
+      return c.json({ error: "Gap actualization not configured" }, 501);
+    }
+    const owner = c.req.param("owner");
+    const repo = c.req.param("repo");
+    const repoFullName = `${owner}/${repo}`;
+    const gapId = c.req.param("gapId");
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const createEntity = body.create_entity === true;
+
+    try {
+      const result = await deps.gapActualizationService.createIssueFromGap(repoFullName, gapId, { createEntity });
+      return c.json(result, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof GapNotFoundError) return c.json({ error: message }, 404);
+      if (err instanceof GapAlreadyActualizedError) return c.json({ error: message }, 409);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // POST /repos/:owner/:repo/gaps/create-all — create issues for all open gaps
+  app.post("/repos/:owner/:repo/gaps/create-all", async (c) => {
+    if (!deps.gapActualizationService) {
+      return c.json({ error: "Gap actualization not configured" }, 501);
+    }
+    const owner = c.req.param("owner");
+    const repo = c.req.param("repo");
+    const repoFullName = `${owner}/${repo}`;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const createEntity = body.create_entity === true;
+
+    try {
+      const results = await deps.gapActualizationService.createIssuesFromAllGaps(repoFullName, { createEntity });
+      const statusCode = results.length > 0 ? 201 : 200;
+      return c.json({ repo: repoFullName, created: results.length, issues: results }, statusCode);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
     }
   });
 
