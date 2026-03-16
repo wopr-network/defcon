@@ -15,7 +15,7 @@
 
 import type { FleetManager } from "@wopr-network/platform-core/fleet";
 import { logger } from "../logger.js";
-import type { IFleetManager, ProvisionConfig } from "./provision-holyshipper.js";
+import type { IFleetManager, ProvisionConfig, ProvisionResult } from "./provision-holyshipper.js";
 
 export interface HolyshipperFleetManagerConfig {
   /** Platform-core FleetManager instance (wraps Docker). */
@@ -39,8 +39,6 @@ export class HolyshipperFleetManager implements IFleetManager {
   private readonly gatewayKey: string;
   private readonly network: string | undefined;
   private readonly containerPort: number;
-  /** Track host ports for runner URL resolution. */
-  private readonly runnerUrls = new Map<string, string>();
 
   constructor(config: HolyshipperFleetManagerConfig) {
     this.fleet = config.fleetManager;
@@ -51,7 +49,7 @@ export class HolyshipperFleetManager implements IFleetManager {
     this.containerPort = config.containerPort ?? 8080;
   }
 
-  async provision(entityId: string, config: ProvisionConfig): Promise<string> {
+  async provision(entityId: string, config: ProvisionConfig): Promise<ProvisionResult> {
     const botId = `hs-${entityId.slice(0, 8)}-${Date.now()}`;
 
     logger.info("[fleet] provisioning holyshipper container", {
@@ -101,27 +99,17 @@ export class HolyshipperFleetManager implements IFleetManager {
       await this.postCheckout(runnerUrl, config);
     }
 
-    // Store runner URL for gate delegation
-    this.runnerUrls.set(entityId, runnerUrl);
-
     logger.info("[fleet] holyshipper container ready", {
       botId,
       entityId,
       runnerUrl,
     });
 
-    return containerId;
+    return { containerId, runnerUrl };
   }
 
   async teardown(containerId: string): Promise<void> {
     logger.info("[fleet] tearing down holyshipper container", { containerId });
-
-    // Remove runner URL mapping
-    for (const [entityId, url] of this.runnerUrls) {
-      if (url.includes(containerId) || entityId === containerId) {
-        this.runnerUrls.delete(entityId);
-      }
-    }
 
     try {
       await this.fleet.remove(containerId);
@@ -131,11 +119,6 @@ export class HolyshipperFleetManager implements IFleetManager {
         error: err instanceof Error ? err.message : String(err),
       });
     }
-  }
-
-  /** Get the runner URL for an entity (for gate delegation). */
-  getRunnerUrl(entityId: string): string | null {
-    return this.runnerUrls.get(entityId) ?? null;
   }
 
   // ---------------------------------------------------------------------------
