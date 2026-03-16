@@ -359,6 +359,54 @@ async function main() {
   // Start reaper
   const stopReaper = engine.startReaper(30_000);
 
+  // ─── 9b. Holyshipper fleet lifecycle (ephemeral containers) ────────
+  if (config.HOLYSHIP_WORKER_IMAGE && config.HOLYSHIP_GATEWAY_KEY) {
+    try {
+      const Docker = (await import("dockerode")).default;
+      const docker = new Docker();
+      const { ProfileStore } = await import("@wopr-network/platform-core/fleet/profile-store");
+      const { FleetManager } = await import("@wopr-network/platform-core/fleet");
+
+      const profileStore = new ProfileStore(`${config.FLEET_DATA_DIR}/profiles`);
+      const coreFleetManager = new FleetManager(docker, profileStore);
+
+      const { HolyshipperFleetManager } = await import("./fleet/holyshipper-fleet-manager.js");
+      const holyshipperFleet = new HolyshipperFleetManager({
+        fleetManager: coreFleetManager,
+        image: config.HOLYSHIP_WORKER_IMAGE,
+        gatewayUrl: config.APP_BASE_URL ? `${config.APP_BASE_URL}/v1` : "http://localhost:3001/v1",
+        gatewayKey: config.HOLYSHIP_GATEWAY_KEY,
+        network: config.DOCKER_NETWORK,
+      });
+
+      const { EntityLifecycleManager } = await import("./fleet/entity-lifecycle.js");
+      const lifecycleManager = new EntityLifecycleManager(
+        engineDb,
+        tenantId,
+        holyshipperFleet,
+        repos.entities,
+        async () => {
+          if (!hasGitHubApp) return null;
+          const installations = await installationRepo.listByTenant(tenantId);
+          if (installations.length === 0) return null;
+          const { token } = await getInstallationAccessToken(
+            config.GITHUB_APP_ID as string,
+            config.GITHUB_APP_PRIVATE_KEY as string,
+            installations[0].installationId,
+          );
+          return token;
+        },
+      );
+
+      eventEmitter.register(lifecycleManager);
+      logger.info("Holyshipper fleet lifecycle registered (ephemeral containers)");
+    } catch (err) {
+      logger.warn("Holyshipper fleet lifecycle setup failed (non-fatal)", (err as Error).message);
+    }
+  } else {
+    logger.info("Holyshipper fleet lifecycle disabled (HOLYSHIP_WORKER_IMAGE or HOLYSHIP_GATEWAY_KEY not set)");
+  }
+
   // ─── 10. Engine REST routes (claim/report for holyshippers) ────────
   app.route(
     "/api",

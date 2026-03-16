@@ -38,6 +38,11 @@ const envSchema = z.object({
   // Fleet
   FLEET_DATA_DIR: z.string().default("/data/fleet"),
 
+  // Holyshipper ephemeral containers
+  HOLYSHIP_WORKER_IMAGE: optStr,
+  HOLYSHIP_GATEWAY_KEY: optStr,
+  DOCKER_NETWORK: optStr,
+
   // Notifications (Resend)
   RESEND_API_KEY: optStr,
   FROM_EMAIL: z.string().default("noreply@holyship.wtf"),
