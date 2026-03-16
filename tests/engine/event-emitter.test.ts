@@ -62,9 +62,9 @@ describe("EventEmitter", () => {
     expect(healthy.emit).toHaveBeenCalled();
   });
 
-  it("logs adapter errors to console.error", async () => {
-    const emitter = new EventEmitter();
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("logs adapter errors via logger", async () => {
+    const mockLogger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    const emitter = new EventEmitter(mockLogger);
     const failing: IEventBusAdapter = {
       emit: vi.fn().mockRejectedValue(new Error("boom")),
     };
@@ -72,8 +72,10 @@ describe("EventEmitter", () => {
 
     await emitter.emit(makeEvent());
 
-    expect(spy).toHaveBeenCalledWith("[EventEmitter] adapter error:", expect.any(Error));
-    spy.mockRestore();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      "[EventEmitter] adapter REJECTED",
+      expect.objectContaining({ error: "boom" }),
+    );
   });
 
   it("resolves immediately with zero adapters", async () => {
