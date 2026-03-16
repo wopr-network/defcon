@@ -15,6 +15,13 @@
       "when": 1773676200544,
       "tag": "0001_tired_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773688363473,
+      "tag": "0002_omniscient_power_man",
+      "breakpoints": true
     }
   ]
 }

@@ -322,6 +322,49 @@ export const githubInstallations = pgTable(
   ],
 );
 
+/** Interrogation results — RepoConfig stored per repo per tenant. */
+export const repoConfigs = pgTable(
+  "repo_configs",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    repo: text("repo").notNull(),
+    config: jsonb("config").notNull(),
+    claudeMd: text("claude_md"),
+    status: text("status").notNull().default("complete"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_repo_config_tenant_repo").on(table.tenantId, table.repo),
+    index("idx_repo_configs_tenant").on(table.tenantId),
+  ],
+);
+
+/** Gaps identified during repo interrogation. */
+export const repoGaps = pgTable(
+  "repo_gaps",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    repoConfigId: text("repo_config_id")
+      .notNull()
+      .references(() => repoConfigs.id),
+    capability: text("capability").notNull(),
+    title: text("title").notNull(),
+    priority: text("priority").notNull(),
+    description: text("description").notNull(),
+    issueUrl: text("issue_url"),
+    status: text("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_repo_gaps_config").on(table.repoConfigId),
+    index("idx_repo_gaps_tenant").on(table.tenantId),
+    index("idx_repo_gaps_status").on(table.repoConfigId, table.status),
+  ],
+);
+
 /** Holyshipper container instances provisioned per entity. */
 export const holyshipperContainers = pgTable(
   "holyshipper_containers",
