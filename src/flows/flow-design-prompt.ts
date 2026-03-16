@@ -83,22 +83,71 @@ Transitions connect states via signals. Each transition optionally has a gate. T
 
 Design a custom flow for this specific repo. You have the repo's capabilities above — use them intelligently.
 
-The base flow is a starting point, not a prescription. Adapt it:
+The base flow is a starting point. The example below is a reference for quality and structure. Your job is to produce a flow that is **deeply customized for this specific repo** — not a lightly edited copy of the example.
 
-- If a capability doesn't exist, remove the state or gate that depends on it. A repo with no CI has no use for a ci-green gate. A repo with no docs infrastructure doesn't need a docs state.
-- If a capability exists, make the prompts specific. Don't say "run the CI gate" — say "run \`pnpm lint && pnpm build && pnpm test\`". Don't say "check the linter" — say "run \`biome check\`". The repo config tells you exactly what tools and commands this repo uses. Put them in the prompts.
-- If the repo has review bots, tell the reviewer to check their comments. If it has a merge queue, tell the merger to use it. If it has conventional commits, tell the coder to follow the convention.
-- Tune model tiers to the work. Architecture and coding need sonnet. Learning and merging can use haiku. Simple repos might use haiku for everything.
-- Tune timeouts to the repo. If CI has many required checks, give the ci-green gate more time.
+### What "deeply customized" means
 
-**Non-negotiable constraints:**
+The example prompts are templates. Your prompts must be rewritten for this repo's reality. Here's the difference:
+
+**Generic (bad):** "Write clean, tested code."
+**Customized (good):** "Write code following the existing service → repository → controller pattern in src/. Tests go in tests/ mirroring the src/ structure. This repo uses vitest with a 98% coverage threshold — test every branch. Use biome for formatting (run \`pnpm lint\` before pushing)."
+
+**Generic (bad):** "Check for bugs and security issues."
+**Customized (good):** "This repo uses Drizzle ORM with PostgreSQL. Check for: missing \`db.transaction()\` around multi-step writes (TOCTOU races), SQL injection via raw queries, missing unique constraints, and n+1 query patterns in the REST handlers."
+
+Every prompt you write should read like it was written by someone who has worked on this repo for months. Use the repo config to fill in specifics:
+
+### How to use the repo config in prompts
+
+**spec prompt — "Reading This Codebase" section:**
+- Reference the repo's actual languages, framework, and structure
+- Name the actual testing framework and what patterns the tests follow
+- If the repo is a monorepo, explain the package layout and how capabilities differ per package
+- If CLAUDE.md exists, tell the architect to read it — it contains gotchas and conventions
+
+**code prompt — "Writing Code For This Repo" section:**
+- Put the actual CI gate command in a prominent section: \`ruff check . && pytest --cov=src --cov-fail-under=85\`
+- Name the actual linter, formatter, build tool, and their exact commands
+- Reference the testing framework and where tests live
+- If the repo has coverage thresholds, state them explicitly
+- If the repo uses conventional commits, say so
+- If the repo has dependency management (poetry, pnpm, bundler), give the exact add command
+
+**review prompt — "What To Look For" section:**
+- Name the language-specific pitfalls that are common in this ecosystem
+- If the repo has review bots, name them and tell the reviewer to check their comments
+- Reference the coverage threshold and what tools enforce it
+- Call out the repo's known fragile areas (from CLAUDE.md gotchas if available)
+- Name specific anti-patterns for the framework (field injection in Spring, N+1 in Rails, sync-over-async in .NET)
+
+**fix prompt:**
+- Include the exact CI gate command
+- Reference the same tools and patterns as the code prompt
+
+**merge prompt:**
+- If merge queue: \`gh pr merge --auto\` and explain the dequeue/re-enqueue pattern for DIRTY status
+- If no merge queue: \`gh pr merge --squash\` (or whichever strategy the repo uses)
+- If review bots exist, tell the merger to verify their findings are resolved
+
+**gate failure prompts:**
+- Include the exact CI gate command so the agent knows what to fix
+- Be specific about what the gate checked and what was missing
+
+### Structural decisions
+
+- If a capability doesn't exist, remove the state or gate that depends on it. No CI → no ci-green gate. No docs → no docs state.
+- Tune timeouts to the repo. Fast CI (Go) → 5 min. Slow CI (Rust, Java/Gradle) → 15 min. Standard → 10 min.
+- Tune model tiers. Spec and code need sonnet. Learning and merge can use haiku. For trivially simple repos, consider haiku for everything.
+
+### Non-negotiable constraints
+
 - The review↔fix loop must exist. This is what guarantees code quality.
 - The learning state must exist. This feeds the prompt engineering loop.
 - Terminal states (done, stuck, cancelled, budget_exceeded) must exist.
 - Gates must use primitive ops (issue_tracker.comment_exists, vcs.ci_status, vcs.pr_status). These are the only gate types available.
 - Prompt templates can use Handlebars: \`{{entity.artifacts.issueNumber}}\`, \`{{entity.artifacts.prUrl}}\`, etc.
 
-**The goal is a flow where reaching "done" means the work is correct — structurally guaranteed, not just hoped for.**
+**The goal is a flow where reaching "done" means the work is correct — structurally guaranteed by gates, deeply informed by repo-specific prompts, not generically hoped for.**
 
 ## Output Format
 
