@@ -118,9 +118,17 @@ Include the PR URL in your response.`,
 2. Check every automated review bot comment (CodeRabbit, Sourcery, etc.).
 3. Verify CI is green.
 4. Check for: bugs, security issues, missing tests, spec violations, dead code.
-5. If everything passes: say "clean"
-6. If there are issues: say "issues" and list every finding with file, line, and description.
-7. If CI failed: say "ci_failed"`,
+5. When done, output ONE of the following signals on a line by itself with no other text:
+
+clean
+
+If there are issues, list every finding with file, line, and description, then output:
+
+issues
+
+If CI failed, output:
+
+ci_failed`,
   },
   {
     name: "fix",
@@ -176,7 +184,10 @@ cant_resolve`,
 4. When done, output the following signal on a line by itself with no other text:
 
 docs_ready
-If you can't complete documentation, say: cant_document`,
+
+If you can't complete documentation, output instead:
+
+cant_document`,
   },
   {
     name: "learning",
@@ -213,9 +224,17 @@ learned`,
 ## Instructions
 1. Verify the PR is mergeable (no conflicts, CI green, reviews approved).
 2. Add the PR to the merge queue or merge directly.
-3. If merged: say "merged"
-4. If blocked (merge queue rejected, conflicts): say "blocked"
-5. If PR was closed without merge: say "closed"`,
+3. When done, output ONE of the following signals on a line by itself with no other text:
+
+merged
+
+If blocked (merge queue rejected, conflicts), output:
+
+blocked
+
+If PR was closed without merge, output:
+
+closed`,
   },
   // Terminal states — no prompt templates, no agents
   {
