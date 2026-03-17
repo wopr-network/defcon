@@ -29,6 +29,7 @@ import { logger } from "./logger.js";
 import type { Entity } from "./repositories/interfaces.js";
 import { createScopedRepos } from "./repositories/scoped-repos.js";
 import { createEngineRoutes } from "./routes/engine.js";
+import { createFlowEditorRoutes } from "./routes/flow-editor.js";
 
 // ---------------------------------------------------------------------------
 // Notification worker handle (for graceful shutdown)
@@ -453,6 +454,26 @@ async function main() {
       },
     }),
   );
+
+  // ─── 11b. Flow editor routes ───────────────────────────────────────
+  if (hasGitHubApp) {
+    app.route(
+      "/api",
+      createFlowEditorRoutes({
+        getGithubToken: async () => {
+          const installations = await installationRepo.listByTenant(tenantId);
+          if (installations.length === 0) return null;
+          const { token } = await getInstallationAccessToken(
+            config.GITHUB_APP_ID as string,
+            config.GITHUB_APP_PRIVATE_KEY as string,
+            installations[0].installationId,
+          );
+          return token;
+        },
+      }),
+    );
+    logger.info("Flow editor routes mounted");
+  }
 
   // ─── 12. GitHub webhook routes ─────────────────────────────────────
   if (config.GITHUB_WEBHOOK_SECRET) {
