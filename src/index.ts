@@ -391,11 +391,16 @@ async function main() {
           if (!hasGitHubApp) return null;
           const installations = await installationRepo.listByTenant(tenantId);
           if (installations.length === 0) return null;
-          const { token } = await getInstallationAccessToken(
+          const inst = installations[0];
+          if (inst.accessToken && inst.tokenExpiresAt && inst.tokenExpiresAt > new Date()) {
+            return inst.accessToken;
+          }
+          const { token, expiresAt } = await getInstallationAccessToken(
             config.GITHUB_APP_ID as string,
             config.GITHUB_APP_PRIVATE_KEY as string,
-            installations[0].installationId,
+            inst.installationId,
           );
+          await installationRepo.updateToken(inst.installationId, token, expiresAt);
           return token;
         },
         poolSize: 4,
@@ -483,16 +488,21 @@ async function main() {
           if (!hasGitHubApp) return null;
           const installations = await installationRepo.listByTenant(tenantId);
           if (installations.length === 0) return null;
-          const { token } = await getInstallationAccessToken(
+          const inst = installations[0];
+          if (inst.accessToken && inst.tokenExpiresAt && inst.tokenExpiresAt > new Date()) {
+            return inst.accessToken;
+          }
+          const { token, expiresAt } = await getInstallationAccessToken(
             config.GITHUB_APP_ID as string,
             config.GITHUB_APP_PRIVATE_KEY as string,
-            installations[0].installationId,
+            inst.installationId,
           );
+          await installationRepo.updateToken(inst.installationId, token, expiresAt);
           return token;
         },
       });
 
-      app.route("/api", createFlowEditorRoutes({ flowEditService }));
+      app.route("/api", createFlowEditorRoutes({ flowEditService, workerToken: config.HOLYSHIP_WORKER_TOKEN }));
       logger.info("Flow editor routes mounted");
     } catch (err) {
       logger.warn("Flow editor setup failed (non-fatal)", (err as Error).message);
