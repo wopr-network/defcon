@@ -19,6 +19,10 @@ export function createFlowEditorRoutes(deps: FlowEditorRouteDeps): Hono {
     const owner = c.req.param("owner");
     const repo = c.req.param("repo");
 
+    if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
+      return c.json({ error: "Invalid owner or repo name" }, 400);
+    }
+
     const token = await deps.getGithubToken();
     if (!token) {
       return c.json({ error: "GitHub App not configured" }, 501);
