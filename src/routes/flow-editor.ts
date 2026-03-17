@@ -4,20 +4,48 @@
  * Endpoints for reading and writing .holyship/flow.yml from a customer repo.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { parse as parseYaml } from "yaml";
 
 export interface FlowEditorRouteDeps {
   getGithubToken: () => Promise<string | null>;
+  workerToken?: string;
+}
+
+function tokensMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 export function createFlowEditorRoutes(deps: FlowEditorRouteDeps): Hono {
   const app = new Hono();
 
+  // Bearer token auth middleware
+  app.use("/*", async (c, next) => {
+    if (!deps.workerToken) return next();
+    const auth = c.req.header("Authorization");
+    if (!auth) return c.json({ error: "Missing Authorization header" }, 401);
+    const parts = auth.split(" ");
+    if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
+      return c.json({ error: "Invalid Authorization format" }, 401);
+    }
+    if (!tokensMatch(parts[1], deps.workerToken)) {
+      return c.json({ error: "Invalid token" }, 403);
+    }
+    return next();
+  });
+
   // GET /repos/:owner/:repo/flow — read .holyship/flow.yml
   app.get("/repos/:owner/:repo/flow", async (c) => {
     const owner = c.req.param("owner");
     const repo = c.req.param("repo");
+
+    if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
+      return c.json({ error: "Invalid owner or repo name" }, 400);
+    }
 
     const token = await deps.getGithubToken();
     if (!token) {
@@ -65,6 +93,10 @@ export function createFlowEditorRoutes(deps: FlowEditorRouteDeps): Hono {
   app.post("/repos/:owner/:repo/flow/apply", async (c) => {
     const owner = c.req.param("owner");
     const repo = c.req.param("repo");
+
+    if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
+      return c.json({ error: "Invalid owner or repo name" }, 400);
+    }
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const yaml = body.yaml as string | undefined;

@@ -473,6 +473,7 @@ async function main() {
     app.route(
       "/api",
       createFlowEditorRoutes({
+        workerToken: config.HOLYSHIP_WORKER_TOKEN,
         getGithubToken: async () => {
           const installations = await installationRepo.listByTenant(tenantId);
           if (installations.length === 0) return null;
