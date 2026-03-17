@@ -29,6 +29,7 @@ import { logger } from "./logger.js";
 import type { Entity } from "./repositories/interfaces.js";
 import { createScopedRepos } from "./repositories/scoped-repos.js";
 import { createEngineRoutes } from "./routes/engine.js";
+import { createFlowEditorRoutes } from "./routes/flow-editor.js";
 
 // ---------------------------------------------------------------------------
 // Notification worker handle (for graceful shutdown)
@@ -453,6 +454,50 @@ async function main() {
       },
     }),
   );
+
+  // ─── 11b. Flow editor routes ──────────────────────────────────────
+  if (config.HOLYSHIP_WORKER_IMAGE && config.HOLYSHIP_GATEWAY_KEY) {
+    try {
+      const Docker = (await import("dockerode")).default;
+      const docker = new Docker();
+      const { ProfileStore } = await import("@wopr-network/platform-core/fleet/profile-store");
+      const { FleetManager } = await import("@wopr-network/platform-core/fleet");
+      const { HolyshipperFleetManager } = await import("./fleet/holyshipper-fleet-manager.js");
+
+      const profileStore = new ProfileStore(`${config.FLEET_DATA_DIR}/profiles`);
+      const coreFleetManager = new FleetManager(docker, profileStore);
+      const holyshipperFleet = new HolyshipperFleetManager({
+        fleetManager: coreFleetManager,
+        image: config.HOLYSHIP_WORKER_IMAGE,
+        gatewayUrl: config.APP_BASE_URL ? `${config.APP_BASE_URL}/v1` : "http://localhost:3001/v1",
+        gatewayKey: config.HOLYSHIP_GATEWAY_KEY,
+        network: config.DOCKER_NETWORK,
+      });
+
+      const { FlowEditService } = await import("./flows/flow-edit-service.js");
+      const flowEditService = new FlowEditService({
+        db: engineDb,
+        tenantId,
+        fleetManager: holyshipperFleet,
+        getGithubToken: async () => {
+          if (!hasGitHubApp) return null;
+          const installations = await installationRepo.listByTenant(tenantId);
+          if (installations.length === 0) return null;
+          const { token } = await getInstallationAccessToken(
+            config.GITHUB_APP_ID as string,
+            config.GITHUB_APP_PRIVATE_KEY as string,
+            installations[0].installationId,
+          );
+          return token;
+        },
+      });
+
+      app.route("/api", createFlowEditorRoutes({ flowEditService }));
+      logger.info("Flow editor routes mounted");
+    } catch (err) {
+      logger.warn("Flow editor setup failed (non-fatal)", (err as Error).message);
+    }
+  }
 
   // ─── 12. GitHub webhook routes ─────────────────────────────────────
   if (config.GITHUB_WEBHOOK_SECRET) {
