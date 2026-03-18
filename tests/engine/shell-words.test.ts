@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { splitShellWords } from "../../src/engine/shell-words.js";
 
 describe("splitShellWords", () => {
@@ -23,13 +23,9 @@ describe("splitShellWords", () => {
   });
 
   it("handles mixed quoting styles", () => {
-    expect(splitShellWords(`gates/check.sh --name "John Doe" --filter '.status == "active"'`)).toEqual([
-      "gates/check.sh",
-      "--name",
-      "John Doe",
-      "--filter",
-      '.status == "active"',
-    ]);
+    expect(
+      splitShellWords(`gates/check.sh --name "John Doe" --filter '.status == "active"'`),
+    ).toEqual(["gates/check.sh", "--name", "John Doe", "--filter", '.status == "active"']);
   });
 
   it("handles multiple spaces between words", () => {
@@ -53,7 +49,7 @@ describe("splitShellWords", () => {
   });
 
   it("handles empty quoted strings", () => {
-    expect(splitShellWords('echo \'\' ""')).toEqual(["echo", "", ""]);
+    expect(splitShellWords("echo '' \"\"")).toEqual(["echo", "", ""]);
   });
 
   it("throws on unterminated single quote", () => {

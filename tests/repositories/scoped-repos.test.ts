@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vite-plus/test";
 import { createTestDb, type TestDb } from "../helpers/pg-test-db.js";
 import { createScopedRepos } from "../../src/repositories/scoped-repos.js";
 

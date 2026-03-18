@@ -1,38 +1,42 @@
 {
   "name": "@wopr-network/holyship",
   "version": "0.2.2",
-  "type": "module",
-  "packageManager": "pnpm@9.15.4",
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "main": "./dist/exports.js",
-  "types": "./dist/exports.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/exports.d.ts",
-      "import": "./dist/exports.js"
-    },
-    "./package.json": "./package.json"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wopr-network/holyship.git"
   },
   "files": [
     "dist",
     "drizzle",
     "gates"
   ],
+  "type": "module",
+  "main": "./dist/exports.mjs",
+  "types": "./dist/exports.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/exports.d.mts",
+      "import": "./dist/exports.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "vp pack",
     "prepublishOnly": "pnpm build",
     "dev": "tsx src/index.ts",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --fix src/",
-    "format": "biome format --write src/",
-    "check": "biome check src/ && tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "lint": "vp lint src/",
+    "lint:fix": "vp lint --fix src/",
+    "format": "vp fmt src/",
+    "check": "vp check",
+    "test": "vp test run",
+    "test:watch": "vp test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "prepare": "vp config"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
@@ -58,26 +62,28 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.4",
     "@electric-sql/pglite": "^0.3.16",
     "@types/dockerode": "^4.0.1",
     "@types/node": "^25.3.3",
     "@types/pg": "^8.15.6",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.0",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  },
-  "pnpm": {},
-  "publishConfig": {
-    "access": "public"
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "release": {
     "extends": "@wopr-network/semantic-release-config"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wopr-network/holyship.git"
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
   }
 }

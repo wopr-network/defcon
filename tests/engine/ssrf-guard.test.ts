@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vite-plus/test";
 import { checkSsrf, _dnsCache } from "../../src/engine/ssrf-guard.js";
 
 // Mock dns/promises so tests don't do real DNS

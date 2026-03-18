@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { getHandlebars, registerHelper } from "../../src/engine/handlebars.js";
 import { validateTemplate } from "../../src/engine/handlebars.js";
 

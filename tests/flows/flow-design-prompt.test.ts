@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { parseFlowDesignOutput, renderFlowDesignPrompt } from "../../src/flows/flow-design-prompt.js";
+import { describe, expect, it } from "vite-plus/test";
+import {
+  parseFlowDesignOutput,
+  renderFlowDesignPrompt,
+} from "../../src/flows/flow-design-prompt.js";
 import type { RepoConfig } from "../../src/flows/interrogation-prompt.js";
 
 const SAMPLE_CONFIG: RepoConfig = {
@@ -8,7 +11,11 @@ const SAMPLE_CONFIG: RepoConfig = {
   description: "A web app",
   languages: ["typescript"],
   monorepo: false,
-  ci: { supported: true, provider: "github-actions", gateCommand: "pnpm lint && pnpm build && pnpm test" },
+  ci: {
+    supported: true,
+    provider: "github-actions",
+    gateCommand: "pnpm lint && pnpm build && pnpm test",
+  },
   testing: { supported: true, framework: "vitest", runCommand: "pnpm test" },
   linting: { supported: true, tool: "biome", runCommand: "pnpm lint" },
   formatting: { supported: true, tool: "biome", runCommand: "pnpm format" },
@@ -47,7 +54,10 @@ describe("parseFlowDesignOutput", () => {
     expect(result.design.states).toHaveLength(10);
     expect(result.design.gates).toHaveLength(2);
     expect(result.design.transitions).toHaveLength(7);
-    expect(result.design.gateWiring["spec-posted"]).toEqual({ fromState: "spec", trigger: "spec_ready" });
+    expect(result.design.gateWiring["spec-posted"]).toEqual({
+      fromState: "spec",
+      trigger: "spec_ready",
+    });
     expect(result.notes).toContain("Removed docs state");
   });
 
@@ -67,7 +77,9 @@ flow_design_complete`;
   });
 
   it("throws on missing FLOW_DESIGN line", () => {
-    expect(() => parseFlowDesignOutput("Just text.\n\nflow_design_complete")).toThrow("missing FLOW_DESIGN");
+    expect(() => parseFlowDesignOutput("Just text.\n\nflow_design_complete")).toThrow(
+      "missing FLOW_DESIGN",
+    );
   });
 
   it("throws on missing flow name", () => {

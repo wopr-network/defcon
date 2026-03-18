@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 import { DrizzleDomainEventRepository } from "../../../src/repositories/drizzle/domain-event.repo.js";
 import { DrizzleFlowRepository } from "../../../src/repositories/drizzle/flow.repo.js";
@@ -79,7 +79,9 @@ describe("flow.repo unique constraint handling", () => {
 
   it("create() throws ConflictError on duplicate flow name", async () => {
     await repo.create({ name: "my-flow", initialState: "open" });
-    await expect(repo.create({ name: "my-flow", initialState: "open" })).rejects.toThrow(ConflictError);
+    await expect(repo.create({ name: "my-flow", initialState: "open" })).rejects.toThrow(
+      ConflictError,
+    );
   });
 
   it("addState() throws ConflictError on duplicate state name in same flow", async () => {

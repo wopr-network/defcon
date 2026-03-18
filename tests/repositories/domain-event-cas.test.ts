@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vite-plus/test";
 import type { PGlite } from "@electric-sql/pglite";
 import { createTestDb, type TestDb } from "../helpers/pg-test-db.js";
 import { DrizzleDomainEventRepository } from "../../src/repositories/drizzle/domain-event.repo.js";
@@ -66,7 +66,12 @@ describe("DrizzleDomainEventRepository CAS", () => {
   it("appendCas succeeds with undefined expectedSequence (auto-read)", async () => {
     await repo.append("test.event", "e1", { setup: true });
     // last sequence is 1; appendCas should auto-read it and succeed
-    const result = await repo.appendCas("invocation.claimed", "e1", { agentId: "agent:auto" }, undefined);
+    const result = await repo.appendCas(
+      "invocation.claimed",
+      "e1",
+      { agentId: "agent:auto" },
+      undefined,
+    );
     expect(result).not.toBeNull();
     expect(result!.sequence).toBe(2);
     expect(result!.type).toBe("invocation.claimed");

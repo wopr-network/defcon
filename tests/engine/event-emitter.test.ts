@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { EngineEvent, IEventBusAdapter } from "../../src/engine/event-types.js";
 import { EventEmitter } from "../../src/engine/event-emitter.js";
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { buildInvocation } from "../../src/engine/invocation-builder.js";
 import type { EnrichedEntity, Entity, Flow, State } from "../../src/repositories/interfaces.js";
 
@@ -64,14 +64,62 @@ describe("buildInvocation", () => {
 
   it("renders built-in helpers from shared Handlebars instance", async () => {
     const state = makeState({
-      promptTemplate: "Count: {{invocation_count entity \"coding\"}}",
+      promptTemplate: 'Count: {{invocation_count entity "coding"}}',
     });
     const entity: EnrichedEntity = {
       ...makeEntity(),
       invocations: [
-        { id: "i-1", entityId: "ent-1", stage: "coding", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
-        { id: "i-2", entityId: "ent-1", stage: "coding", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
-        { id: "i-3", entityId: "ent-1", stage: "review", mode: "active", prompt: "", context: null, claimedBy: null, claimedAt: null, startedAt: null, completedAt: null, failedAt: null, signal: null, artifacts: null, error: null, ttlMs: 0 },
+        {
+          id: "i-1",
+          entityId: "ent-1",
+          stage: "coding",
+          mode: "active",
+          prompt: "",
+          context: null,
+          claimedBy: null,
+          claimedAt: null,
+          startedAt: null,
+          completedAt: null,
+          failedAt: null,
+          signal: null,
+          artifacts: null,
+          error: null,
+          ttlMs: 0,
+        },
+        {
+          id: "i-2",
+          entityId: "ent-1",
+          stage: "coding",
+          mode: "active",
+          prompt: "",
+          context: null,
+          claimedBy: null,
+          claimedAt: null,
+          startedAt: null,
+          completedAt: null,
+          failedAt: null,
+          signal: null,
+          artifacts: null,
+          error: null,
+          ttlMs: 0,
+        },
+        {
+          id: "i-3",
+          entityId: "ent-1",
+          stage: "review",
+          mode: "active",
+          prompt: "",
+          context: null,
+          claimedBy: null,
+          claimedAt: null,
+          startedAt: null,
+          completedAt: null,
+          failedAt: null,
+          signal: null,
+          artifacts: null,
+          error: null,
+          ttlMs: 0,
+        },
       ],
     };
     const result = await buildInvocation(state, entity);
@@ -89,7 +137,8 @@ describe("buildInvocation", () => {
       },
     });
     const mockLinear = {
-      get: vi.fn()
+      get: vi
+        .fn()
         .mockResolvedValueOnce({ title: "Fix login bug", id: "ISS-1" })
         .mockResolvedValueOnce({ key: "WOP-42", id: "ISS-2" }),
     };
@@ -230,5 +279,4 @@ describe("buildInvocation", () => {
     expect(result.prompt).toBe("You are on the wopr-incident team.");
     expect(result.context).toHaveProperty("flow");
   });
-
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vite-plus/test";
 import { HolyshipClient } from "../../src/holyship-client/client.js";
 
 afterEach(() => {
@@ -89,10 +89,7 @@ describe("HolyshipClient", () => {
 
       await client.claim({ role: "architect", flow: "my-flow" });
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        `${BASE}/api/flows/my-flow/claim`,
-        expect.any(Object),
-      );
+      expect(fetchMock).toHaveBeenCalledWith(`${BASE}/api/flows/my-flow/claim`, expect.any(Object));
     });
 
     it("URL-encodes flow name with special characters", async () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 import { DrizzleTransitionLogRepository } from "../../../src/repositories/drizzle/transition-log.repo.js";

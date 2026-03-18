@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { RunnerAdapterRegistry } from "../../src/engine/runner-adapter-registry.js";
 
 const mockFetch = vi.fn();
@@ -99,10 +99,7 @@ describe("RunnerAdapterRegistry", () => {
 
     await registry.execute("int-1", "vcs.ci_status", { ref: "abc" });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://runner:8080/gate",
-      expect.anything(),
-    );
+    expect(mockFetch).toHaveBeenCalledWith("http://runner:8080/gate", expect.anything());
   });
 
   it("forwards caller abort signal", async () => {
@@ -122,7 +119,12 @@ describe("RunnerAdapterRegistry", () => {
       requestTimeoutMs: 60_000,
     });
 
-    const result = await registry.execute("int-1", "vcs.ci_status", { ref: "abc" }, callerController.signal);
+    const result = await registry.execute(
+      "int-1",
+      "vcs.ci_status",
+      { ref: "abc" },
+      callerController.signal,
+    );
     expect(result.outcome).toBe("timeout");
   });
 });

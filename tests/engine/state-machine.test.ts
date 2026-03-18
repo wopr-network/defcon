@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { evaluateCondition, findTransition, isTerminal, validateFlow } from "../../src/engine/state-machine.js";
+import { describe, expect, it } from "vite-plus/test";
+import {
+  evaluateCondition,
+  findTransition,
+  isTerminal,
+  validateFlow,
+} from "../../src/engine/state-machine.js";
 import type { Flow, Transition } from "../../src/repositories/interfaces.js";
 
 // ─── evaluateCondition ───
@@ -174,7 +179,13 @@ describe("findTransition", () => {
     const flow = makeFlow({
       states: [{ name: "open" }, { name: "a" }, { name: "b" }],
       transitions: [
-        { fromState: "open", toState: "a", trigger: "go", priority: 10, condition: '{{eq status "ready"}}' },
+        {
+          fromState: "open",
+          toState: "a",
+          trigger: "go",
+          priority: 10,
+          condition: '{{eq status "ready"}}',
+        },
         { fromState: "open", toState: "b", trigger: "go", priority: 5 },
       ],
     });

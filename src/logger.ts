@@ -35,18 +35,34 @@ function toMeta(args: unknown[]): Record<string, unknown> | undefined {
 export const logger: Logger = {
   error: (msg, ...args) => {
     const meta = toMeta(args);
-    meta ? _pino.error(meta, msg) : _pino.error(msg);
+    if (meta) {
+      _pino.error(meta, msg);
+    } else {
+      _pino.error(msg);
+    }
   },
   warn: (msg, ...args) => {
     const meta = toMeta(args);
-    meta ? _pino.warn(meta, msg) : _pino.warn(msg);
+    if (meta) {
+      _pino.warn(meta, msg);
+    } else {
+      _pino.warn(msg);
+    }
   },
   info: (msg, ...args) => {
     const meta = toMeta(args);
-    meta ? _pino.info(meta, msg) : _pino.info(msg);
+    if (meta) {
+      _pino.info(meta, msg);
+    } else {
+      _pino.info(msg);
+    }
   },
   debug: (msg, ...args) => {
     const meta = toMeta(args);
-    meta ? _pino.debug(meta, msg) : _pino.debug(msg);
+    if (meta) {
+      _pino.debug(meta, msg);
+    } else {
+      _pino.debug(msg);
+    }
   },
 };

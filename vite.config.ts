@@ -1,6 +1,14 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  staged: {
+    "*.{ts,js,json}": "vp check --fix",
+  },
+  pack: {
+    entry: ["src/exports.ts"],
+    dts: true,
+    format: ["esm"],
+  },
   test: {
     env: {
       // 64-char hex key (32 bytes) for integration tests that use DrizzleIntegrationRepository

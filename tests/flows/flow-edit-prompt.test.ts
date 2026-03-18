@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { parseFlowEditOutput, renderFlowEditPrompt } from "../../src/flows/flow-edit-prompt.js";
 import type { RepoConfig } from "../../src/flows/interrogation-prompt.js";
 

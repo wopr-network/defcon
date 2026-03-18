@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../src/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -41,10 +41,10 @@ DESIGN_NOTES:Simplified flow — removed docs, review, merge for minimal demo.
 flow_design_complete`;
 
 function mockOkResponse(content: string) {
-  return new Response(
-    JSON.stringify({ choices: [{ message: { content } }] }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 describe("FlowDesignService", () => {
@@ -105,10 +105,10 @@ describe("FlowDesignService", () => {
       claudeMd: null,
     });
     fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ choices: [{ message: { content: "" } }] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ choices: [{ message: { content: "" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     await expect(service.designFlow("org/app")).rejects.toThrow("Gateway returned empty content");

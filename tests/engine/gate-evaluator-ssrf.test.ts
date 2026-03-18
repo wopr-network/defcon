@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vite-plus/test";
 import type { Gate, Entity, IGateRepository } from "../../src/repositories/interfaces.js";
 
 // Mock ssrf-guard
@@ -100,6 +100,11 @@ describe("evaluateGate SSRF integration", () => {
     const result = await evaluateGate(gate, makeEntity(), gateRepo);
     expect(result.passed).toBe(false);
     expect(result.output).toContain("SSRF_BLOCKED");
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "g2", false, expect.stringContaining("SSRF_BLOCKED"));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "g2",
+      false,
+      expect.stringContaining("SSRF_BLOCKED"),
+    );
   });
 });

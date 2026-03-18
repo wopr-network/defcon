@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { Engine } from "../../src/engine/engine.js";
 import type {
   Entity,
@@ -242,8 +242,17 @@ describe("worker affinity — claim priority", () => {
 
     expect(result).not.toBeNull();
     expect(result!.entityId).toBe("ent-affinity");
-    expect(invocationRepo.findUnclaimedWithAffinity).toHaveBeenCalledWith("flow-1", "engineering", "wkr-A");
-    expect(entityRepo.setAffinity).toHaveBeenCalledWith("ent-affinity", "wkr-A", "engineering", expect.any(Date));
+    expect(invocationRepo.findUnclaimedWithAffinity).toHaveBeenCalledWith(
+      "flow-1",
+      "engineering",
+      "wkr-A",
+    );
+    expect(entityRepo.setAffinity).toHaveBeenCalledWith(
+      "ent-affinity",
+      "wkr-A",
+      "engineering",
+      expect.any(Date),
+    );
   });
 
   it("expired affinity releases entity to open pool", async () => {
@@ -321,7 +330,12 @@ describe("worker affinity — claim priority", () => {
     await engine.claimWork("devops", "test-flow", "wkr-devops-1");
 
     // setAffinity called with the devops worker, overwriting engineering affinity
-    expect(entityRepo.setAffinity).toHaveBeenCalledWith(entity.id, "wkr-devops-1", "devops", expect.any(Date));
+    expect(entityRepo.setAffinity).toHaveBeenCalledWith(
+      entity.id,
+      "wkr-devops-1",
+      "devops",
+      expect.any(Date),
+    );
   });
 
   it("affinity skipped when no worker_id provided", async () => {

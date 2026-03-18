@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vite-plus/test";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 import { DrizzleGateRepository } from "../../../src/repositories/drizzle/gate.repo.js";
 import { entities, flowDefinitions } from "../../../src/repositories/drizzle/schema.js";
@@ -77,7 +77,10 @@ describe("DrizzleGateRepository", () => {
       });
 
       expect(gate.type).toBe("api");
-      expect(gate.apiConfig).toEqual({ url: "https://sonar.example.com/api/check", method: "POST" });
+      expect(gate.apiConfig).toEqual({
+        url: "https://sonar.example.com/api/check",
+        method: "POST",
+      });
     });
   });
 

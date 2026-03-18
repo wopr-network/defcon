@@ -9,7 +9,12 @@ export class DomainEventPersistAdapter implements IEventBusAdapter {
     // Skip events that have no entityId (e.g. definition.changed)
     if (!("entityId" in event) || !event.entityId) return;
 
-    const { type, entityId, emittedAt, ...rest } = event as EngineEvent & { entityId: string };
+    const {
+      type,
+      entityId,
+      emittedAt: _emittedAt,
+      ...rest
+    } = event as EngineEvent & { entityId: string };
     await this.repo.append(type, entityId, rest as Record<string, unknown>);
   }
 }

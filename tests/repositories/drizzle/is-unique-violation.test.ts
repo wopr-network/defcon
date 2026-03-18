@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vite-plus/test";
 import { isUniqueViolation } from "../../../src/repositories/drizzle/is-unique-violation.js";
 
 describe("isUniqueViolation", () => {

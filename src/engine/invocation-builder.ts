@@ -44,7 +44,10 @@ export async function buildInvocation(
         try {
           resolvedRefs[key] = await (adapter as { get(id: string): Promise<unknown> }).get(ref.id);
         } catch (err) {
-          logger.warn(`[invocation-builder] Failed to resolve ref "${key}" via adapter "${ref.adapter}":`, err);
+          logger.warn(
+            `[invocation-builder] Failed to resolve ref "${key}" via adapter "${ref.adapter}":`,
+            err,
+          );
         }
       }
     }),
@@ -61,8 +64,13 @@ export async function buildInvocation(
     typeof entity.artifacts.refs === "object"
       ? (entity.artifacts.refs as Record<string, unknown>)
       : {};
-  const entityForContext = { ...entity, refs: { ...artifactRefs, ...(entity.refs ?? {}) } };
-  const context: Record<string, unknown> = { entity: entityForContext, state, refs: resolvedRefs, flow: flow ?? null };
+  const entityForContext = { ...entity, refs: { ...artifactRefs, ...entity.refs } };
+  const context: Record<string, unknown> = {
+    entity: entityForContext,
+    state,
+    refs: resolvedRefs,
+    flow: flow ?? null,
+  };
 
   let prompt = "";
   let systemPrompt = "";

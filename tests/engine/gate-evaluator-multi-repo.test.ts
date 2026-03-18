@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { GateEvalResult } from "../../src/engine/gate-evaluator.js";
 import { evaluateGateForAllRepos } from "../../src/engine/gate-evaluator.js";
 import type { Entity, Gate, IGateRepository } from "../../src/repositories/interfaces.js";
@@ -56,7 +56,16 @@ describe("evaluateGateForAllRepos", () => {
       output: "ok",
     });
 
-    const result = await evaluateGateForAllRepos(makeGate(), entity, mockGateRepo, null, null, null, null, evalFn);
+    const result = await evaluateGateForAllRepos(
+      makeGate(),
+      entity,
+      mockGateRepo,
+      null,
+      null,
+      null,
+      null,
+      evalFn,
+    );
     expect(result.passed).toBe(true);
     expect(evalFn).toHaveBeenCalledTimes(2);
   });
@@ -74,7 +83,16 @@ describe("evaluateGateForAllRepos", () => {
       .mockResolvedValueOnce({ passed: true, timedOut: false, output: "ok" })
       .mockResolvedValueOnce({ passed: false, timedOut: false, output: "CI failed" });
 
-    const result = await evaluateGateForAllRepos(makeGate(), entity, mockGateRepo, null, null, null, null, evalFn);
+    const result = await evaluateGateForAllRepos(
+      makeGate(),
+      entity,
+      mockGateRepo,
+      null,
+      null,
+      null,
+      null,
+      evalFn,
+    );
     expect(result.passed).toBe(false);
     expect(result.output).toContain("platform-core");
   });
@@ -87,7 +105,16 @@ describe("evaluateGateForAllRepos", () => {
       output: "ok",
     });
 
-    const result = await evaluateGateForAllRepos(makeGate(), entity, mockGateRepo, null, null, null, null, evalFn);
+    const result = await evaluateGateForAllRepos(
+      makeGate(),
+      entity,
+      mockGateRepo,
+      null,
+      null,
+      null,
+      null,
+      evalFn,
+    );
     expect(result.passed).toBe(true);
     expect(evalFn).toHaveBeenCalledTimes(1);
     // Should be called with the original entity (no _currentRepo enrichment)
@@ -131,7 +158,16 @@ describe("evaluateGateForAllRepos", () => {
       .mockResolvedValueOnce({ passed: true, timedOut: false, output: "green" })
       .mockResolvedValueOnce({ passed: true, timedOut: false, output: "green" });
 
-    const result = await evaluateGateForAllRepos(makeGate(), entity, mockGateRepo, null, null, null, null, evalFn);
+    const result = await evaluateGateForAllRepos(
+      makeGate(),
+      entity,
+      mockGateRepo,
+      null,
+      null,
+      null,
+      null,
+      evalFn,
+    );
     expect(result.output).toBe("[a] green\n[b] green");
   });
 });

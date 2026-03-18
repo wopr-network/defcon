@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../src/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -24,9 +24,33 @@ function mockEngine() {
 }
 
 const SAMPLE_GAPS = [
-  { id: "g-1", capability: "ci", title: "Set up CI pipeline", priority: "high" as const, description: "No CI found.", status: "open", issueUrl: null },
-  { id: "g-2", capability: "docs", title: "Set up documentation", priority: "low" as const, description: "No docs.", status: "open", issueUrl: null },
-  { id: "g-3", capability: "testing", title: "Add tests", priority: "high" as const, description: "No tests.", status: "issue_created", issueUrl: "https://github.com/org/app/issues/99" },
+  {
+    id: "g-1",
+    capability: "ci",
+    title: "Set up CI pipeline",
+    priority: "high" as const,
+    description: "No CI found.",
+    status: "open",
+    issueUrl: null,
+  },
+  {
+    id: "g-2",
+    capability: "docs",
+    title: "Set up documentation",
+    priority: "low" as const,
+    description: "No docs.",
+    status: "open",
+    issueUrl: null,
+  },
+  {
+    id: "g-3",
+    capability: "testing",
+    title: "Add tests",
+    priority: "high" as const,
+    description: "No tests.",
+    status: "issue_created",
+    issueUrl: "https://github.com/org/app/issues/99",
+  },
 ];
 
 describe("GapActualizationService", () => {
@@ -54,10 +78,13 @@ describe("GapActualizationService", () => {
   it("creates a GitHub issue and links it back to the gap", async () => {
     vi.mocked(interrogation.getGaps).mockResolvedValue(SAMPLE_GAPS);
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ number: 42, html_url: "https://github.com/org/app/issues/42" }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ number: 42, html_url: "https://github.com/org/app/issues/42" }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     const result = await service.createIssueFromGap("org/app", "g-1");
@@ -77,16 +104,23 @@ describe("GapActualizationService", () => {
     expect(body.labels).toContain("priority: high");
 
     // Verify gap was linked
-    expect(interrogation.linkGapToIssue).toHaveBeenCalledWith("g-1", "org/app", "https://github.com/org/app/issues/42");
+    expect(interrogation.linkGapToIssue).toHaveBeenCalledWith(
+      "g-1",
+      "org/app",
+      "https://github.com/org/app/issues/42",
+    );
   });
 
   it("creates entity when createEntity option is true", async () => {
     vi.mocked(interrogation.getGaps).mockResolvedValue(SAMPLE_GAPS);
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ number: 43, html_url: "https://github.com/org/app/issues/43" }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ number: 43, html_url: "https://github.com/org/app/issues/43" }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     const result = await service.createIssueFromGap("org/app", "g-1", { createEntity: true });
@@ -110,7 +144,9 @@ describe("GapActualizationService", () => {
   it("rejects if gap already has an issue", async () => {
     vi.mocked(interrogation.getGaps).mockResolvedValue(SAMPLE_GAPS);
 
-    await expect(service.createIssueFromGap("org/app", "g-3")).rejects.toThrow("already has an issue");
+    await expect(service.createIssueFromGap("org/app", "g-3")).rejects.toThrow(
+      "already has an issue",
+    );
   });
 
   it("rejects on GitHub API failure", async () => {
@@ -136,10 +172,16 @@ describe("GapActualizationService", () => {
     // Two open gaps → two fetch calls
     fetchSpy
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ number: 50, html_url: "https://github.com/org/app/issues/50" }), { status: 201 }),
+        new Response(
+          JSON.stringify({ number: 50, html_url: "https://github.com/org/app/issues/50" }),
+          { status: 201 },
+        ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ number: 51, html_url: "https://github.com/org/app/issues/51" }), { status: 201 }),
+        new Response(
+          JSON.stringify({ number: 51, html_url: "https://github.com/org/app/issues/51" }),
+          { status: 201 },
+        ),
       );
 
     const results = await service.createIssuesFromAllGaps("org/app");
@@ -157,7 +199,10 @@ describe("GapActualizationService", () => {
     fetchSpy
       .mockResolvedValueOnce(new Response("Server Error", { status: 500 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ number: 51, html_url: "https://github.com/org/app/issues/51" }), { status: 201 }),
+        new Response(
+          JSON.stringify({ number: 51, html_url: "https://github.com/org/app/issues/51" }),
+          { status: 201 },
+        ),
       );
 
     const results = await service.createIssuesFromAllGaps("org/app");
@@ -171,9 +216,12 @@ describe("GapActualizationService", () => {
     vi.mocked(interrogation.getGaps).mockResolvedValue(SAMPLE_GAPS);
     vi.mocked(interrogation.linkGapToIssue).mockRejectedValueOnce(new Error("DB connection lost"));
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ number: 60, html_url: "https://github.com/org/app/issues/60" }), {
-        status: 201,
-      }),
+      new Response(
+        JSON.stringify({ number: 60, html_url: "https://github.com/org/app/issues/60" }),
+        {
+          status: 201,
+        },
+      ),
     );
 
     // Should NOT throw — issue was created on GitHub, link failure is logged

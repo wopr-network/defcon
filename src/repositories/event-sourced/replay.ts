@@ -4,7 +4,11 @@ import type { Artifacts, DomainEvent, Entity, Invocation, Mode, Refs } from "../
  * Replay entity state from a snapshot (or null) plus subsequent domain events.
  * Events must be ordered by sequence ascending.
  */
-export function replayEntity(snapshot: Entity | null, events: DomainEvent[], entityId: string): Entity | null {
+export function replayEntity(
+  snapshot: Entity | null,
+  events: DomainEvent[],
+  entityId: string,
+): Entity | null {
   let state = snapshot ? { ...snapshot } : null;
 
   for (const event of events) {
@@ -37,7 +41,7 @@ export function replayEntity(snapshot: Entity | null, events: DomainEvent[], ent
         const p = event.payload as Record<string, unknown>;
         state.state = p.toState as string;
         if (p.artifacts) {
-          state.artifacts = { ...(state.artifacts ?? {}), ...(p.artifacts as Record<string, unknown>) };
+          state.artifacts = { ...state.artifacts, ...(p.artifacts as Record<string, unknown>) };
         }
         state.updatedAt = new Date(event.emittedAt);
         state.claimedBy = null;
@@ -62,7 +66,7 @@ export function replayEntity(snapshot: Entity | null, events: DomainEvent[], ent
       case "entity.artifacts_updated": {
         if (!state) break;
         const p = event.payload as Record<string, unknown>;
-        state.artifacts = { ...(state.artifacts ?? {}), ...p };
+        state.artifacts = { ...state.artifacts, ...p };
         state.updatedAt = new Date(event.emittedAt);
         break;
       }

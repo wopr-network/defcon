@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vite-plus/test";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 import { DrizzleFlowRepository } from "../../../src/repositories/drizzle/flow.repo.js";
 import type { IFlowRepository } from "../../../src/repositories/interfaces.js";
@@ -181,13 +181,20 @@ describe("DrizzleFlowRepository", () => {
 
     it("no-ops gracefully when changes is empty", async () => {
       const flow = await repo.create({ name: "ut-noop", initialState: "s" });
-      const t = await repo.addTransition(flow.id, { fromState: "s", toState: "d", trigger: "go", priority: 5 });
+      const t = await repo.addTransition(flow.id, {
+        fromState: "s",
+        toState: "d",
+        trigger: "go",
+        priority: 5,
+      });
       const result = await repo.updateTransition(t.id, {});
       expect(result.priority).toBe(5);
     });
 
     it("throws for non-existent transition", async () => {
-      await expect(repo.updateTransition("bad", { priority: 1 })).rejects.toThrow("Transition not found");
+      await expect(repo.updateTransition("bad", { priority: 1 })).rejects.toThrow(
+        "Transition not found",
+      );
     });
   });
 
@@ -202,7 +209,12 @@ describe("DrizzleFlowRepository", () => {
       expect(ver.version).toBe(1);
       expect(ver.flowId).toBe(flow.id);
       expect(ver.createdAt).toBeInstanceOf(Date);
-      const snap = ver.snapshot as { name: string; initialState: string; states: unknown[]; transitions: unknown[] };
+      const snap = ver.snapshot as {
+        name: string;
+        initialState: string;
+        states: unknown[];
+        transitions: unknown[];
+      };
       expect(snap.states).toHaveLength(2);
       expect(snap.transitions).toHaveLength(1);
       // Snapshot must include top-level flow metadata, not just states/transitions
@@ -226,14 +238,22 @@ describe("DrizzleFlowRepository", () => {
       const flow = await repo.create({ name: "restore-test", initialState: "open" });
       await repo.addState(flow.id, { name: "open" });
       await repo.addState(flow.id, { name: "review" });
-      await repo.addTransition(flow.id, { fromState: "open", toState: "review", trigger: "submit" });
+      await repo.addTransition(flow.id, {
+        fromState: "open",
+        toState: "review",
+        trigger: "submit",
+      });
 
       // Snapshot v1 (2 states, 1 transition)
       await repo.snapshot(flow.id);
 
       // Modify: add a third state and another transition
       await repo.addState(flow.id, { name: "closed" });
-      await repo.addTransition(flow.id, { fromState: "review", toState: "closed", trigger: "approve" });
+      await repo.addTransition(flow.id, {
+        fromState: "review",
+        toState: "closed",
+        trigger: "approve",
+      });
 
       // Verify modified state (3 states, 2 transitions)
       const modified = await repo.get(flow.id);

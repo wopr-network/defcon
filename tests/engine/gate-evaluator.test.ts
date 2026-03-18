@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { evaluateGate } from "../../src/engine/gate-evaluator.js";
 import type { Gate, Entity, IGateRepository } from "../../src/repositories/interfaces.js";
 
@@ -13,7 +13,12 @@ vi.mock("../../src/engine/gate-command-validator.js", () => ({
     // Simulate the shell-parse error path for commands with unterminated quotes.
     // A quote is unterminated if the count of that quote character is odd (no closing match).
     if ((cmd.split('"').length - 1) % 2 !== 0 || (cmd.split("'").length - 1) % 2 !== 0) {
-      return { valid: false, resolvedPath: null, error: "Shell parse error: Unterminated double quote", parts: null };
+      return {
+        valid: false,
+        resolvedPath: null,
+        error: "Shell parse error: Unterminated double quote",
+        parts: null,
+      };
     }
     // Return a realistic resolvedPath so execFile receives the binary path, not the full command string.
     // This preserves the TOCTOU fix (resolvedPath flows to runCommand) while keeping tests hermetic.
@@ -69,8 +74,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "ok", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "ok",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -84,8 +93,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -99,8 +112,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "timeout", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "timeout",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -116,8 +133,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "all good", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "all good",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -141,7 +162,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/timed out/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/timed out/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/timed out/),
+    );
   });
 
   it("returns passed=false when functionRef has no colon separator", async () => {
@@ -154,7 +180,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/Invalid functionRef/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/Invalid functionRef/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/Invalid functionRef/),
+    );
   });
 
   it("returns passed=false when exported name is not a function", async () => {
@@ -170,7 +201,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/not found/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/not found/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/not found/),
+    );
   });
 
   it("returns passed=false when functionRef is null", async () => {
@@ -178,8 +214,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "Gate functionRef is not configured", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "Gate functionRef is not configured",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -193,15 +233,24 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "Gate apiConfig is not configured", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "Gate apiConfig is not configured",
+        evaluatedAt: new Date(),
       }),
     };
 
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toBe("Gate apiConfig is not configured");
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, "Gate apiConfig is not configured");
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      "Gate apiConfig is not configured",
+    );
   });
 
   it("returns passed=false and records when apiConfig is missing", async () => {
@@ -213,7 +262,12 @@ describe("evaluateGate", () => {
 
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, "Gate apiConfig is not configured");
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      "Gate apiConfig is not configured",
+    );
   });
 
   it("returns passed=false when Handlebars template is malformed", async () => {
@@ -229,7 +283,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/Template error/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/Template error/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/Template error/),
+    );
   });
 
   it("returns passed=false when rendered URL uses non-https protocol", async () => {
@@ -245,19 +304,32 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/URL protocol not allowed/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/URL protocol not allowed/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/URL protocol not allowed/),
+    );
   });
 
   it("returns passed=true for api gate with matching status", async () => {
     const gate = makeGate({
       type: "api",
-      apiConfig: { url: "https://example.com/check/{{entity.id}}", method: "GET", expectStatus: 200 },
+      apiConfig: {
+        url: "https://example.com/check/{{entity.id}}",
+        method: "GET",
+        expectStatus: 200,
+      },
     });
     const entity = makeEntity({ id: "ent-42" });
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-42", gateId: "gate-1",
-        passed: true, output: "HTTP 200", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-42",
+        gateId: "gate-1",
+        passed: true,
+        output: "HTTP 200",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -268,7 +340,10 @@ describe("evaluateGate", () => {
       const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
       expect(result.passed).toBe(true);
       expect(result.output).toBe("HTTP 200");
-      expect(mockFetch).toHaveBeenCalledWith("https://example.com/check/ent-42", expect.objectContaining({ method: "GET" }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://example.com/check/ent-42",
+        expect.objectContaining({ method: "GET" }),
+      );
       expect(gateRepo.record).toHaveBeenCalledWith("ent-42", "gate-1", true, "HTTP 200");
     } finally {
       vi.unstubAllGlobals();
@@ -283,8 +358,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "HTTP 500", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "HTTP 500",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -309,8 +388,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "fetch failed", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "fetch failed",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -335,8 +418,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "HTTP 200", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "HTTP 200",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -346,7 +433,10 @@ describe("evaluateGate", () => {
     try {
       const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
       expect(result.passed).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith("https://example.com/health", expect.objectContaining({ method: "GET" }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://example.com/health",
+        expect.objectContaining({ method: "GET" }),
+      );
     } finally {
       vi.unstubAllGlobals();
     }
@@ -357,8 +447,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity({ id: "ent-1" });
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "ent-1", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "ent-1",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -386,7 +480,9 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo = {} as IGateRepository;
 
-    await expect(evaluateGate(gate, entity, gateRepo)).rejects.toThrow("Unknown gate type: webhook");
+    await expect(evaluateGate(gate, entity, gateRepo)).rejects.toThrow(
+      "Unknown gate type: webhook",
+    );
   });
 
   it("returns passed=false for functionRef path outside project root (path traversal)", async () => {
@@ -402,7 +498,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/gates\/ directory/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gates\/ directory/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/gates\/ directory/),
+    );
   });
 
   it("clears the timeout timer when the function gate resolves", async () => {
@@ -416,8 +517,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "all good", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "all good",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -435,8 +540,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: true, output: "all good", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: true,
+        output: "all good",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -453,8 +562,12 @@ describe("evaluateGate", () => {
     const entity = makeEntity();
     const gateRepo: Pick<IGateRepository, "record"> = {
       record: vi.fn().mockResolvedValue({
-        id: "gr-1", entityId: "ent-1", gateId: "gate-1",
-        passed: false, output: "", evaluatedAt: new Date(),
+        id: "gr-1",
+        entityId: "ent-1",
+        gateId: "gate-1",
+        passed: false,
+        output: "",
+        evaluatedAt: new Date(),
       }),
     };
 
@@ -476,7 +589,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/gate exploded/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gate exploded/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/gate exploded/),
+    );
   });
 
   it("renders Handlebars templates in command using { entity } context", async () => {
@@ -512,7 +630,12 @@ describe("evaluateGate", () => {
     const result = await evaluateGate(gate, entity, gateRepo as IGateRepository);
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/gates\/ directory/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/gates\/ directory/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/gates\/ directory/),
+    );
   });
 
   it("returns passed=false for command gate with unterminated quote — does not throw", async () => {
@@ -529,6 +652,11 @@ describe("evaluateGate", () => {
     expect(result.passed).toBe(false);
     expect(result.timedOut).toBe(false);
     expect(result.output).toMatch(/Gate command not allowed/);
-    expect(gateRepo.record).toHaveBeenCalledWith("ent-1", "gate-1", false, expect.stringMatching(/Gate command not allowed/));
+    expect(gateRepo.record).toHaveBeenCalledWith(
+      "ent-1",
+      "gate-1",
+      false,
+      expect.stringMatching(/Gate command not allowed/),
+    );
   });
 });

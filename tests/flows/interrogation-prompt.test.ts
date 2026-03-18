@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { parseInterrogationOutput } from "../../src/flows/interrogation-prompt.js";
 
 describe("parseInterrogationOutput", () => {

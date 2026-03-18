@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vite-plus/test";
 import { getTableName } from "drizzle-orm";
 import * as schema from "../../../src/repositories/drizzle/schema.js";
 import { createTestDb } from "../../helpers/pg-test-db.js";

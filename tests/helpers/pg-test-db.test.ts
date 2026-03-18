@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vite-plus/test";
 import { createTestDb, type TestDb } from "./pg-test-db.js";
 import { flowDefinitions } from "../../src/repositories/drizzle/schema.js";
 

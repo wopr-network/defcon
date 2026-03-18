@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vite-plus/test";
 import { Engine } from "../../src/engine/engine.js";
 import type {
   IEntityRepository,
@@ -120,9 +120,7 @@ describe("Engine CAS claim", () => {
 
     entityRepo = {
       get: vi.fn().mockResolvedValue(entity),
-      claimById: vi
-        .fn()
-        .mockResolvedValue({ ...entity, claimedBy: "agent:engineering" }),
+      claimById: vi.fn().mockResolvedValue({ ...entity, claimedBy: "agent:engineering" }),
       claim: vi.fn().mockResolvedValue(null),
       release: vi.fn().mockResolvedValue(undefined),
       setAffinity: vi.fn().mockResolvedValue(undefined),
@@ -133,9 +131,7 @@ describe("Engine CAS claim", () => {
       findUnclaimedByFlow: vi.fn().mockResolvedValue([invocation]),
       findUnclaimedWithAffinity: vi.fn().mockResolvedValue([]),
       findByEntity: vi.fn().mockResolvedValue([invocation]),
-      claim: vi
-        .fn()
-        .mockResolvedValue({ ...invocation, claimedBy: "agent:engineering" }),
+      claim: vi.fn().mockResolvedValue({ ...invocation, claimedBy: "agent:engineering" }),
       countActiveByFlow: vi.fn().mockResolvedValue(0),
     } as unknown as IInvocationRepository;
 

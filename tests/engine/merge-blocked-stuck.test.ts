@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { Engine } from "../../src/engine/engine.js";
 import type {
   IEntityRepository,
@@ -15,28 +15,52 @@ import type { IEventBusAdapter, EngineEvent } from "../../src/engine/event-types
 
 function makeEntity(overrides: Partial<Entity> = {}): Entity {
   return {
-    id: "ent-1", flowId: "flow-1", state: "merging",
-    refs: null, artifacts: null, claimedBy: null, claimedAt: null,
-    flowVersion: 1, priority: 0, createdAt: new Date(), updatedAt: new Date(),
-    affinityWorkerId: null, affinityRole: null, affinityExpiresAt: null,
+    id: "ent-1",
+    flowId: "flow-1",
+    state: "merging",
+    refs: null,
+    artifacts: null,
+    claimedBy: null,
+    claimedAt: null,
+    flowVersion: 1,
+    priority: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    affinityWorkerId: null,
+    affinityRole: null,
+    affinityExpiresAt: null,
     ...overrides,
   };
 }
 
 function makeState(overrides: Partial<State> = {}): State {
   return {
-    id: "s-1", flowId: "flow-1", name: "merging",
-    modelTier: null, mode: "active",
-    promptTemplate: null, constraints: null,
+    id: "s-1",
+    flowId: "flow-1",
+    name: "merging",
+    modelTier: null,
+    mode: "active",
+    promptTemplate: null,
+    constraints: null,
     ...overrides,
   };
 }
 
 function makeMergeFlow(): Flow {
   return {
-    id: "flow-1", name: "wopr-changeset", description: null, entitySchema: null,
-    initialState: "backlog", maxConcurrent: 0, maxConcurrentPerRepo: 0, affinityWindowMs: 300000,
-    version: 1, createdBy: null, discipline: "engineering", createdAt: null, updatedAt: null,
+    id: "flow-1",
+    name: "wopr-changeset",
+    description: null,
+    entitySchema: null,
+    initialState: "backlog",
+    maxConcurrent: 0,
+    maxConcurrentPerRepo: 0,
+    affinityWindowMs: 300000,
+    version: 1,
+    createdBy: null,
+    discipline: "engineering",
+    createdAt: null,
+    updatedAt: null,
     states: [
       makeState({ id: "s-merging", name: "merging", promptTemplate: "Watch PR" }),
       makeState({ id: "s-reviewing", name: "reviewing", promptTemplate: "Review PR" }),
@@ -46,24 +70,56 @@ function makeMergeFlow(): Flow {
     ],
     transitions: [
       {
-        id: "t-1", flowId: "flow-1", fromState: "merging", toState: "reviewing",
-        trigger: "blocked", gateId: null, condition: null, priority: 1,
-        spawnFlow: null, spawnTemplate: null, createdAt: null,
+        id: "t-1",
+        flowId: "flow-1",
+        fromState: "merging",
+        toState: "reviewing",
+        trigger: "blocked",
+        gateId: null,
+        condition: null,
+        priority: 1,
+        spawnFlow: null,
+        spawnTemplate: null,
+        createdAt: null,
       },
       {
-        id: "t-2", flowId: "flow-1", fromState: "merging", toState: "done",
-        trigger: "merged", gateId: null, condition: null, priority: 0,
-        spawnFlow: null, spawnTemplate: null, createdAt: null,
+        id: "t-2",
+        flowId: "flow-1",
+        fromState: "merging",
+        toState: "done",
+        trigger: "merged",
+        gateId: null,
+        condition: null,
+        priority: 0,
+        spawnFlow: null,
+        spawnTemplate: null,
+        createdAt: null,
       },
       {
-        id: "t-3", flowId: "flow-1", fromState: "reviewing", toState: "fixing",
-        trigger: "issues", gateId: null, condition: null, priority: 0,
-        spawnFlow: null, spawnTemplate: null, createdAt: null,
+        id: "t-3",
+        flowId: "flow-1",
+        fromState: "reviewing",
+        toState: "fixing",
+        trigger: "issues",
+        gateId: null,
+        condition: null,
+        priority: 0,
+        spawnFlow: null,
+        spawnTemplate: null,
+        createdAt: null,
       },
       {
-        id: "t-4", flowId: "flow-1", fromState: "fixing", toState: "reviewing",
-        trigger: "fixes_pushed", gateId: null, condition: null, priority: 0,
-        spawnFlow: null, spawnTemplate: null, createdAt: null,
+        id: "t-4",
+        flowId: "flow-1",
+        fromState: "fixing",
+        toState: "reviewing",
+        trigger: "fixes_pushed",
+        gateId: null,
+        condition: null,
+        priority: 0,
+        spawnFlow: null,
+        spawnTemplate: null,
+        createdAt: null,
       },
     ],
   };
@@ -71,19 +127,25 @@ function makeMergeFlow(): Flow {
 
 function makeMockRepos(flow: Flow, entity: Entity) {
   const events: EngineEvent[] = [];
-  let currentArtifacts: Record<string, unknown> = { ...(entity.artifacts ?? {}) };
+  let currentArtifacts: Record<string, unknown> = { ...entity.artifacts };
 
   const entityRepo: IEntityRepository = {
     create: vi.fn().mockResolvedValue(entity),
-    get: vi.fn().mockImplementation(async () => ({ ...entity, artifacts: { ...currentArtifacts } })),
+    get: vi
+      .fn()
+      .mockImplementation(async () => ({ ...entity, artifacts: { ...currentArtifacts } })),
     findByFlowAndState: vi.fn().mockResolvedValue([]),
     hasAnyInFlowAndState: vi.fn().mockResolvedValue(false),
-    transition: vi.fn().mockImplementation(async (_id: string, toState: string) =>
-      ({ ...entity, state: toState, artifacts: { ...currentArtifacts } }),
-    ),
-    updateArtifacts: vi.fn().mockImplementation(async (_id: string, arts: Record<string, unknown>) => {
-      currentArtifacts = { ...currentArtifacts, ...arts };
-    }),
+    transition: vi.fn().mockImplementation(async (_id: string, toState: string) => ({
+      ...entity,
+      state: toState,
+      artifacts: { ...currentArtifacts },
+    })),
+    updateArtifacts: vi
+      .fn()
+      .mockImplementation(async (_id: string, arts: Record<string, unknown>) => {
+        currentArtifacts = { ...currentArtifacts, ...arts };
+      }),
     claim: vi.fn().mockResolvedValue(null),
     claimById: vi.fn().mockResolvedValue(null),
     release: vi.fn().mockResolvedValue(undefined),
@@ -130,10 +192,21 @@ function makeMockRepos(flow: Flow, entity: Entity) {
   } as unknown as ITransitionLogRepository;
 
   const eventEmitter: IEventBusAdapter = {
-    emit: vi.fn().mockImplementation(async (event: EngineEvent) => { events.push(event); }),
+    emit: vi.fn().mockImplementation(async (event: EngineEvent) => {
+      events.push(event);
+    }),
   };
 
-  return { entityRepo, flowRepo, invocationRepo, gateRepo, transitionLogRepo, eventEmitter, events, getCurrentArtifacts: () => currentArtifacts };
+  return {
+    entityRepo,
+    flowRepo,
+    invocationRepo,
+    gateRepo,
+    transitionLogRepo,
+    eventEmitter,
+    events,
+    getCurrentArtifacts: () => currentArtifacts,
+  };
 }
 
 describe("merge-blocked stuck detection", () => {
@@ -197,9 +270,17 @@ describe("merge-blocked stuck detection", () => {
     const flow = makeMergeFlow();
     // Add a hypothetical blocked transition from reviewing
     flow.transitions.push({
-      id: "t-extra", flowId: "flow-1", fromState: "reviewing", toState: "fixing",
-      trigger: "blocked", gateId: null, condition: null, priority: 1,
-      spawnFlow: null, spawnTemplate: null, createdAt: null,
+      id: "t-extra",
+      flowId: "flow-1",
+      fromState: "reviewing",
+      toState: "fixing",
+      trigger: "blocked",
+      gateId: null,
+      condition: null,
+      priority: 1,
+      spawnFlow: null,
+      spawnTemplate: null,
+      createdAt: null,
     });
     const entity = makeEntity({ state: "reviewing", artifacts: {} });
     const repos = makeMockRepos(flow, entity);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 import { DrizzleEntityRepository } from "../../../src/repositories/drizzle/entity.repo.js";

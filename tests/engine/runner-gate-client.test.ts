@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createRunnerGateHandler } from "../../src/engine/runner-gate-client.js";
 import type { Entity } from "../../src/repositories/interfaces.js";
 

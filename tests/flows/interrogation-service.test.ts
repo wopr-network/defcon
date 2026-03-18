@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../src/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -6,7 +6,12 @@ vi.mock("../../src/logger.js", () => ({
 
 vi.mock("../../src/repositories/drizzle/schema.js", () => ({
   repoConfigs: { _: { name: "repoConfigs" }, id: "id", tenantId: "tenant_id", repo: "repo" },
-  repoGaps: { _: { name: "repoGaps" }, id: "id", tenantId: "tenant_id", repoConfigId: "repo_config_id" },
+  repoGaps: {
+    _: { name: "repoGaps" },
+    id: "id",
+    tenantId: "tenant_id",
+    repoConfigId: "repo_config_id",
+  },
 }));
 
 // Mock drizzle-orm operators to be identity functions for test DB
@@ -20,7 +25,9 @@ import { InterrogationService } from "../../src/flows/interrogation-service.js";
 // Mock fleet manager
 function mockFleetManager() {
   return {
-    provision: vi.fn().mockResolvedValue({ containerId: "ctr-123", runnerUrl: "http://runner:3001" }),
+    provision: vi
+      .fn()
+      .mockResolvedValue({ containerId: "ctr-123", runnerUrl: "http://runner:3001" }),
     teardown: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -35,18 +42,20 @@ function mockDb() {
   const db = {
     _store: store,
     insert: vi.fn().mockImplementation((table: { _: { name: string } }) => ({
-      values: vi.fn().mockImplementation((rows: Record<string, unknown> | Record<string, unknown>[]) => {
-        const tableName = table._.name as keyof typeof store;
-        const rowArray = Array.isArray(rows) ? rows : [rows];
-        store[tableName]?.push(...rowArray);
-        // Support both plain insert (gaps) and upsert chain (configs)
-        return {
-          then: (resolve: (v: unknown) => void) => resolve(undefined),
-          onConflictDoUpdate: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: rowArray[0]?.id ?? "generated-id" }]),
-          }),
-        };
-      }),
+      values: vi
+        .fn()
+        .mockImplementation((rows: Record<string, unknown> | Record<string, unknown>[]) => {
+          const tableName = table._.name as keyof typeof store;
+          const rowArray = Array.isArray(rows) ? rows : [rows];
+          store[tableName]?.push(...rowArray);
+          // Support both plain insert (gaps) and upsert chain (configs)
+          return {
+            then: (resolve: (v: unknown) => void) => resolve(undefined),
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: rowArray[0]?.id ?? "generated-id" }]),
+            }),
+          };
+        }),
     })),
     select: vi.fn().mockImplementation(() => ({
       from: vi.fn().mockImplementation(() => ({
@@ -116,9 +125,11 @@ describe("InterrogationService", () => {
     const sseBody = makeSseResponse(SAMPLE_OUTPUT);
 
     // Mock fetch
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(sseBody, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(sseBody, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+      );
 
     const result = await service.interrogate("org/app");
 
@@ -156,9 +167,9 @@ describe("InterrogationService", () => {
   });
 
   it("tears down runner even on dispatch failure", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("Internal Server Error", { status: 500 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("Internal Server Error", { status: 500 }));
 
     await expect(service.interrogate("org/app")).rejects.toThrow("Dispatch failed: HTTP 500");
     expect(fleet.teardown).toHaveBeenCalledWith("ctr-123");
@@ -169,9 +180,9 @@ describe("InterrogationService", () => {
   it("tears down runner even on parse failure", async () => {
     // SSE with no REPO_CONFIG line
     const sseBody = makeSseResponse("Just some text with no config.\n\ninterrogation_complete");
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(sseBody, { status: 200 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(sseBody, { status: 200 }));
 
     await expect(service.interrogate("org/app")).rejects.toThrow("missing REPO_CONFIG");
     expect(fleet.teardown).toHaveBeenCalledWith("ctr-123");
@@ -180,7 +191,7 @@ describe("InterrogationService", () => {
   });
 
   it("rejects invalid repo name", async () => {
-    await expect(service.interrogate("bad-name")).rejects.toThrow('Invalid repo name: bad-name');
+    await expect(service.interrogate("bad-name")).rejects.toThrow("Invalid repo name: bad-name");
   });
 
   it("handles SSE with text events instead of result artifact", async () => {
@@ -192,9 +203,9 @@ describe("InterrogationService", () => {
     ];
     const sseBody = events.join("");
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(sseBody, { status: 200 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(sseBody, { status: 200 }));
 
     const result = await service.interrogate("x/y");
     expect(result.config.repo).toBe("x/y");
@@ -218,9 +229,9 @@ describe("InterrogationService", () => {
     }));
 
     const sseBody = makeSseResponse(SAMPLE_OUTPUT);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(sseBody, { status: 200 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(sseBody, { status: 200 }));
 
     const result = await service.interrogate("org/app");
     expect(result.repoConfigId).toBe("existing-id");

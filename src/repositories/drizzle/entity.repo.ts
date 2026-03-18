@@ -73,7 +73,13 @@ export class DrizzleEntityRepository implements IEntityRepository {
     const query = this.db
       .select()
       .from(entities)
-      .where(and(eq(entities.flowId, flowId), eq(entities.state, state), eq(entities.tenantId, this.tenantId)));
+      .where(
+        and(
+          eq(entities.flowId, flowId),
+          eq(entities.state, state),
+          eq(entities.tenantId, this.tenantId),
+        ),
+      );
     const rows = await (limit !== undefined ? query.limit(limit) : query);
     return rows.map((r: typeof entities.$inferSelect) => this.toEntity(r));
   }
@@ -84,7 +90,11 @@ export class DrizzleEntityRepository implements IEntityRepository {
       .select({ id: entities.id })
       .from(entities)
       .where(
-        and(eq(entities.flowId, flowId), inArray(entities.state, stateNames), eq(entities.tenantId, this.tenantId)),
+        and(
+          eq(entities.flowId, flowId),
+          inArray(entities.state, stateNames),
+          eq(entities.tenantId, this.tenantId),
+        ),
       )
       .limit(1);
     return rows.length > 0;
@@ -107,7 +117,7 @@ export class DrizzleEntityRepository implements IEntityRepository {
       const row = rows[0];
       const now = Date.now();
       const mergedArtifacts = artifacts
-        ? { ...((row.artifacts as Record<string, unknown>) ?? {}), ...artifacts }
+        ? { ...(row.artifacts as Record<string, unknown>), ...artifacts }
         : row.artifacts;
 
       await tx
@@ -182,7 +192,13 @@ export class DrizzleEntityRepository implements IEntityRepository {
     const updated = await this.db
       .update(entities)
       .set({ claimedBy: agentId, claimedAt: now, updatedAt: now })
-      .where(and(eq(entities.id, entityId), isNull(entities.claimedBy), eq(entities.tenantId, this.tenantId)))
+      .where(
+        and(
+          eq(entities.id, entityId),
+          isNull(entities.claimedBy),
+          eq(entities.tenantId, this.tenantId),
+        ),
+      )
       .returning();
     if (updated.length === 0) return null;
     return this.toEntity(updated[0]);
@@ -192,7 +208,13 @@ export class DrizzleEntityRepository implements IEntityRepository {
     await this.db
       .update(entities)
       .set({ claimedBy: null, claimedAt: null, updatedAt: Date.now() })
-      .where(and(eq(entities.id, entityId), eq(entities.claimedBy, agentId), eq(entities.tenantId, this.tenantId)));
+      .where(
+        and(
+          eq(entities.id, entityId),
+          eq(entities.claimedBy, agentId),
+          eq(entities.tenantId, this.tenantId),
+        ),
+      );
   }
 
   async appendSpawnedChild(
@@ -208,14 +230,19 @@ export class DrizzleEntityRepository implements IEntityRepository {
       if (rows.length === 0) throw new NotFoundError(`Entity ${parentId} not found`);
       const row = rows[0];
       const artifacts = (row.artifacts as Record<string, unknown>) ?? {};
-      const existing = (Array.isArray(artifacts.spawnedChildren) ? artifacts.spawnedChildren : []) as Array<{
+      const existing = (
+        Array.isArray(artifacts.spawnedChildren) ? artifacts.spawnedChildren : []
+      ) as Array<{
         childId: string;
         childFlow: string;
         spawnedAt: string;
       }>;
       await tx
         .update(entities)
-        .set({ artifacts: { ...artifacts, spawnedChildren: [...existing, entry] }, updatedAt: Date.now() })
+        .set({
+          artifacts: { ...artifacts, spawnedChildren: [...existing, entry] },
+          updatedAt: Date.now(),
+        })
         .where(and(eq(entities.id, parentId), eq(entities.tenantId, this.tenantId)));
     });
   }
@@ -225,12 +252,23 @@ export class DrizzleEntityRepository implements IEntityRepository {
     const rows = await this.db
       .update(entities)
       .set({ claimedBy: null, claimedAt: null, updatedAt: Date.now() })
-      .where(and(not(isNull(entities.claimedBy)), lt(entities.claimedAt, cutoff), eq(entities.tenantId, this.tenantId)))
+      .where(
+        and(
+          not(isNull(entities.claimedBy)),
+          lt(entities.claimedAt, cutoff),
+          eq(entities.tenantId, this.tenantId),
+        ),
+      )
       .returning({ id: entities.id });
     return rows.map((r: { id: string }) => r.id);
   }
 
-  async setAffinity(entityId: string, workerId: string, role: string, expiresAt: Date): Promise<void> {
+  async setAffinity(
+    entityId: string,
+    workerId: string,
+    role: string,
+    expiresAt: Date,
+  ): Promise<void> {
     await this.db
       .update(entities)
       .set({
@@ -262,7 +300,9 @@ export class DrizzleEntityRepository implements IEntityRepository {
     const rows = await this.db
       .select()
       .from(entities)
-      .where(and(eq(entities.parentEntityId, parentEntityId), eq(entities.tenantId, this.tenantId)));
+      .where(
+        and(eq(entities.parentEntityId, parentEntityId), eq(entities.tenantId, this.tenantId)),
+      );
     return rows.map((r: typeof entities.$inferSelect) => this.toEntity(r));
   }
 

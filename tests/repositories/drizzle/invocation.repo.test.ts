@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { DrizzleInvocationRepository } from "../../../src/repositories/drizzle/invocation.repo.js";
-import { entities, flowDefinitions, invocations } from "../../../src/repositories/drizzle/schema.js";
+import {
+  entities,
+  flowDefinitions,
+  invocations,
+} from "../../../src/repositories/drizzle/schema.js";
 import { createTestDb, type TestDb } from "../../helpers/pg-test-db.js";
 
 const TENANT = "test-tenant";
