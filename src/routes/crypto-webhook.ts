@@ -1,20 +1,22 @@
 /**
  * Crypto payment webhook route.
- * Thin wrapper — deps injected via setCryptoWebhookDeps during boot.
+ * Receives payment confirmations from the shared crypto key server.
+ * Delegates to platform-core's handleKeyServerWebhook for crediting.
  */
 
 import { createHmac } from "node:crypto";
+import {
+  type CryptoWebhookDeps,
+  type CryptoWebhookPayload,
+  handleKeyServerWebhook,
+} from "@wopr-network/platform-core/billing";
 import { Hono } from "hono";
 import { logger } from "../logger.js";
 
-// biome-ignore lint/suspicious/noExplicitAny: platform-core types injected at boot
-let _deps: any;
+let _deps: CryptoWebhookDeps | undefined;
 let _webhookSecret: string | undefined;
 
-export function setCryptoWebhookDeps(
-  deps: { chargeStore: unknown; creditLedger: unknown; replayGuard: unknown },
-  webhookSecret: string,
-): void {
+export function setCryptoWebhookDeps(deps: CryptoWebhookDeps, webhookSecret: string): void {
   _deps = deps;
   _webhookSecret = webhookSecret;
 }
@@ -27,15 +29,19 @@ cryptoWebhookRoutes.post("/", async (c) => {
   }
 
   const body = await c.req.text();
-  const sig = c.req.header("btcpay-sig") ?? "";
+  const sig = c.req.header("x-webhook-signature") ?? c.req.header("btcpay-sig") ?? "";
   const expected = `sha256=${createHmac("sha256", _webhookSecret).update(body).digest("hex")}`;
   if (sig !== expected) {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  const payload = JSON.parse(body) as Record<string, unknown>;
-  logger.info("Crypto webhook received", JSON.stringify({ type: payload.type }));
+  const payload = JSON.parse(body) as CryptoWebhookPayload;
+  logger.info("Crypto webhook received", JSON.stringify({ chargeId: payload.chargeId, status: payload.status }));
 
-  // Platform-core settler handles the actual crediting via watchers
-  return c.json({ ok: true });
+  const result = await handleKeyServerWebhook(_deps, payload);
+  if (result.duplicate) {
+    return c.json({ ok: true, duplicate: true });
+  }
+
+  return c.json({ ok: true, handled: result.handled, creditedCents: result.creditedCents });
 });

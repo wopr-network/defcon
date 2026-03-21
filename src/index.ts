@@ -600,8 +600,8 @@ async function main() {
     logger.info("Interrogation routes mounted");
   }
 
-  // ─── 13. Crypto payments (BTCPay + EVM watchers) ────────────────────
-  if (config.BTCPAY_API_KEY && config.BTCPAY_BASE_URL && config.BTCPAY_STORE_ID && config.BTCPAY_WEBHOOK_SECRET) {
+  // ─── 13. Crypto payments (key server + EVM watchers) ────────────────
+  if (config.CRYPTO_SERVICE_URL && config.CRYPTO_WEBHOOK_SECRET) {
     try {
       const { DrizzleCryptoChargeRepository, DrizzleWebhookSeenRepository } = await import(
         "@wopr-network/platform-core/billing"
@@ -612,12 +612,12 @@ async function main() {
       const replayGuard = new DrizzleWebhookSeenRepository(platformDb);
 
       // Wire webhook route deps
-      setCryptoWebhookDeps({ chargeStore: cryptoChargeRepo, creditLedger, replayGuard }, config.BTCPAY_WEBHOOK_SECRET);
+      setCryptoWebhookDeps({ chargeStore: cryptoChargeRepo, creditLedger, replayGuard }, config.CRYPTO_WEBHOOK_SECRET);
 
       // Mount crypto webhook route
       const { cryptoWebhookRoutes } = await import("./routes/crypto-webhook.js");
       app.route("/api/webhooks/crypto", cryptoWebhookRoutes);
-      logger.info("Crypto webhook mounted (BTCPay + EVM)");
+      logger.info("Crypto webhook mounted (key server)");
     } catch (err) {
       logger.warn("Crypto payment setup failed (non-fatal)", (err as Error).message);
     }

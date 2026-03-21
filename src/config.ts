@@ -50,18 +50,13 @@ const envSchema = z.object({
   RESEND_API_KEY: optStr,
   FROM_EMAIL: z.string().default("noreply@holyship.wtf"),
 
-  // Crypto payments (BTCPay)
-  BTCPAY_API_KEY: optStr,
-  BTCPAY_BASE_URL: optStr,
-  BTCPAY_STORE_ID: optStr,
-  BTCPAY_WEBHOOK_SECRET: optStr,
+  // Crypto payments (key server)
+  CRYPTO_SERVICE_URL: optStr,
+  CRYPTO_WEBHOOK_SECRET: optStr,
 
   // EVM (stablecoin + ETH payments)
   EVM_XPUB: optStr,
   EVM_RPC_BASE: optStr,
-
-  // Crypto service
-  CRYPTO_SERVICE_URL: optStr,
 });
 
 export type Config = z.infer<typeof envSchema>;
