@@ -372,6 +372,7 @@ export const billingRouter = router({
         xpub: z.string().min(1).nullable().optional(),
         confirmations: z.number().int().min(1),
         addressType: z.string().min(1).optional(),
+        iconUrl: z.string().url().nullable().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -384,6 +385,7 @@ export const billingRouter = router({
         oracleAddress: input.oracleAddress ?? null,
         xpub: input.xpub ?? null,
         addressType: input.addressType ?? "evm",
+        iconUrl: input.iconUrl ?? null,
       });
       await auditLogger?.log({
         userId: ctx.user.id,
