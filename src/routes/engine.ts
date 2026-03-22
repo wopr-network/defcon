@@ -121,6 +121,12 @@ export function createEngineRoutes(deps: EngineRouteDeps): Hono {
     return c.json(entity, 201);
   });
 
+  // GET /flows — list all flow definitions
+  app.get("/flows", async (c) => {
+    const flows = await deps.flows.list();
+    return c.json(flows, 200);
+  });
+
   // GET /status — engine status
   app.get("/status", async (c) => {
     const status = await deps.engine.getStatus();
