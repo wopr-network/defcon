@@ -71,6 +71,7 @@ export function createShipItRoutes(deps: ShipItDeps): Hono {
       const entity = await deps.engine.createEntity(flowName, undefined, {
         owner,
         repo,
+        repoFullName: `${owner}/${repo}`,
         issueNumber,
         issueTitle: issue.title,
         issueBody: issue.body,
