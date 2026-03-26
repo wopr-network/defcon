@@ -1,26 +1,22 @@
 /**
  * Holyship boot sequence.
  *
- * Follows the paperclip-platform pattern:
- * DB → migrations → auth → credits → gateway → tRPC → engine → GitHub → serve()
+ * Uses bootPlatformServer() from platform-core for the shared platform
+ * infrastructure (DB, migrations, auth, credits, gateway, org, billing).
  *
- * All route-adding work MUST happen before serve().
- * Hono builds its route matcher lazily on first fetch() — adding routes
- * after serve() throws: "Can not add a route since the matcher is already built."
+ * Product-specific code (engine, flows, GitHub, worker pool) is initialized
+ * after boot and mounted as routes on the platform app.
  */
 
-import { serve } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { AuthUser } from "@wopr-network/platform-core/auth";
-import type { TRPCContext } from "@wopr-network/platform-core/trpc";
+import { bootPlatformServer } from "@wopr-network/platform-core/server";
+import { createTRPCContext, setTrpcOrgMemberRepo } from "@wopr-network/platform-core/trpc";
 import { createShipItRoutes } from "./api/ship-it.js";
-import { app } from "./app.js";
 import { getConfig } from "./config.js";
 import { DomainEventPersistAdapter } from "./engine/domain-event-adapter.js";
 import { Engine } from "./engine/engine.js";
 import { EventEmitter } from "./engine/event-emitter.js";
 import type { PrimitiveOpHandler } from "./engine/gate-evaluator.js";
-import type { FlowEditService } from "./flows/flow-edit-service.js";
 import { provisionEngineeringFlow } from "./flows/provision.js";
 import { DrizzleGitHubInstallationRepository } from "./github/installation-repo.js";
 import { checkCiStatus, checkCommentExists, checkPrStatus } from "./github/primitive-ops.js";
@@ -37,12 +33,6 @@ import { createInterrogationRoutes } from "./routes/interrogation.js";
 // Notification worker handle (for graceful shutdown)
 // ---------------------------------------------------------------------------
 let notificationWorkerTimer: ReturnType<typeof setInterval> | null = null;
-
-// ---------------------------------------------------------------------------
-// DB-driven product config (populated during boot, used by notification pipeline)
-// ---------------------------------------------------------------------------
-let _productConfig: { product: { brandName: string; domain: string; fromEmail: string; emailSupport: string } } | null =
-  null;
 
 // ---------------------------------------------------------------------------
 // GitHub token resolution
@@ -83,66 +73,53 @@ function parseRepoFullName(entity: Entity): { owner: string; repo: string } {
 async function main() {
   const config = getConfig();
 
-  // ─── 1. Database ────────────────────────────────────────────────────
-  const { getPool, getPlatformDb, getEngineDb } = await import("./db/index.js");
-  const pool = getPool();
-  const platformDb = getPlatformDb();
-  const engineDb = getEngineDb();
+  // ─── 1. Platform boot (DB, migrations, product config, credits, org) ──
+  const platform = await bootPlatformServer({
+    slug: config.PRODUCT_SLUG,
+    databaseUrl: process.env.DATABASE_URL ?? "",
+    host: config.HOST,
+    port: config.PORT,
+    provisionSecret: process.env.PROVISION_SECRET ?? "",
+    stripeSecretKey: config.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: config.STRIPE_WEBHOOK_SECRET,
+    features: {
+      fleet: !!(config.HOLYSHIP_WORKER_IMAGE && config.HOLYSHIP_GATEWAY_KEY),
+      crypto: !!(config.CRYPTO_SERVICE_URL && config.CRYPTO_WEBHOOK_SECRET),
+      stripe: !!config.STRIPE_SECRET_KEY,
+      gateway: !!config.OPENROUTER_API_KEY,
+      hotPool: false,
+    },
+  });
 
-  // ─── 2. Migrations (platform-core + holyship) ──────────────────────
-  const { runMigrations } = await import("./db/migrate.js");
-  await runMigrations(pool);
-  logger.info("Database migrations complete");
+  const { app, container } = platform;
+  const platformDb = container.db;
 
-  // ─── 2b. Product config (DB-driven) ────────────────────────────────
-  try {
-    const productConfigMod = (await import("@wopr-network/platform-core/product-config" as string)) as {
-      platformBoot: (opts: { slug: string; db: unknown; devOrigins?: string[] }) => Promise<{
-        service: unknown;
-        config: {
-          product: { brandName: string; domain: string; fromEmail: string; emailSupport: string };
-        };
-        corsOrigins: string[];
-        seeded: boolean;
-      }>;
-    };
-    const { config: productConfig, seeded: productConfigSeeded } = await productConfigMod.platformBoot({
-      slug: config.PRODUCT_SLUG,
-      db: platformDb,
-    });
-    _productConfig = productConfig;
-    if (productConfigSeeded) logger.info(`Auto-seeded product config for "${config.PRODUCT_SLUG}"`);
-    logger.info(`Product config loaded: ${productConfig.product.brandName} (${productConfig.product.domain})`);
-  } catch (err) {
-    logger.warn("Product config boot failed (non-fatal)", { error: (err as Error).message });
+  // ─── 2. Holyship engine migrations (local drizzle/ directory) ─────────
+  {
+    const { existsSync } = await import("node:fs");
+    const path = await import("node:path");
+    const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+    const localMigrations = path.resolve(process.cwd(), "drizzle");
+    if (existsSync(localMigrations)) {
+      await migrate(platformDb as never, { migrationsFolder: localMigrations });
+      logger.info("Holyship engine migrations complete");
+    }
   }
 
-  // ─── 3. Seed notification templates ────────────────────────────────
-  try {
-    const { DEFAULT_TEMPLATES, DrizzleNotificationTemplateRepository } = await import(
-      "@wopr-network/platform-core/email"
-    );
-    // biome-ignore lint/suspicious/noExplicitAny: PgDatabase generic
-    const templateRepo = new DrizzleNotificationTemplateRepository(platformDb as any);
-    const seeded = await templateRepo.seed(DEFAULT_TEMPLATES);
-    if (seeded > 0) logger.info(`Seeded ${seeded} notification templates`);
-  } catch (err) {
-    logger.warn("Notification template seeding failed (non-fatal)", (err as Error).message);
-  }
+  // ─── 3. Engine DB (separate Drizzle instance with engine schema) ──────
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const engineSchema = await import("./repositories/drizzle/schema.js");
+  const engineDb = drizzle(container.pool, { schema: engineSchema });
 
-  // ─── 4. Credits (double-entry ledger) ──────────────────────────────
-  const { DrizzleLedger, grantSignupCredits } = await import("@wopr-network/platform-core/credits");
-  const creditLedger = new DrizzleLedger(platformDb);
-  logger.info("Credit ledger initialized");
-
-  // ─── 5. Auth (BetterAuth) ──────────────────────────────────────────
+  // ─── 4. BetterAuth init ───────────────────────────────────────────────
   const { initBetterAuth, runAuthMigrations } = await import("@wopr-network/platform-core/auth/better-auth");
+  const { grantSignupCredits } = await import("@wopr-network/platform-core/credits");
   initBetterAuth({
-    pool,
+    pool: container.pool,
     db: platformDb,
     onUserCreated: async (userId: string) => {
       try {
-        const granted = await grantSignupCredits(creditLedger, userId);
+        const granted = await grantSignupCredits(container.creditLedger, userId);
         if (granted) logger.info(`Granted welcome credits to user ${userId}`);
       } catch (err) {
         logger.error("Failed to grant signup credits", (err as Error).message);
@@ -156,18 +133,45 @@ async function main() {
   }
   logger.info("BetterAuth initialized");
 
-  // ─── 6. Org/tenant support ─────────────────────────────────────────
-  const { DrizzleOrgMemberRepository } = await import("@wopr-network/platform-core/tenancy");
-  const { setTrpcOrgMemberRepo } = await import("@wopr-network/platform-core/trpc");
-  const orgMemberRepo = new DrizzleOrgMemberRepository(platformDb);
-  setTrpcOrgMemberRepo(orgMemberRepo);
+  // Mount BetterAuth handler
+  app.on(["POST", "GET"], "/api/auth/*", async (c) => {
+    const { getAuth } = await import("@wopr-network/platform-core/auth/better-auth");
+    let req: Request;
+    if (c.req.method === "POST") {
+      const body = await c.req.arrayBuffer();
+      req = new Request(c.req.url, {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+        body,
+      });
+    } else {
+      req = c.req.raw;
+    }
+    return getAuth().handler(req);
+  });
+
+  // ─── 5. Org/tenant wiring ────────────────────────────────────────────
+  setTrpcOrgMemberRepo(container.orgMemberRepo);
   const { setAuthHelperOrgMemberRepo } = await import("./trpc/auth-helpers.js");
-  setAuthHelperOrgMemberRepo(orgMemberRepo);
+  setAuthHelperOrgMemberRepo(container.orgMemberRepo);
   logger.info("Org tenant support initialized");
 
-  // ─── 7. Gateway (OpenRouter metered proxy) ─────────────────────────
+  // ─── 6. Seed notification templates ──────────────────────────────────
+  try {
+    const { DEFAULT_TEMPLATES, DrizzleNotificationTemplateRepository } = await import(
+      "@wopr-network/platform-core/email"
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: PgDatabase generic
+    const templateRepo = new DrizzleNotificationTemplateRepository(platformDb as any);
+    const seeded = await templateRepo.seed(DEFAULT_TEMPLATES);
+    if (seeded > 0) logger.info(`Seeded ${seeded} notification templates`);
+  } catch (err) {
+    logger.warn("Notification template seeding failed (non-fatal)", (err as Error).message);
+  }
+
+  // ─── 7. Gateway (OpenRouter metered proxy) ───────────────────────────
   if (config.OPENROUTER_API_KEY) {
-    const { mountGateway, DrizzleServiceKeyRepository } = await import("@wopr-network/platform-core/gateway");
+    const { mountGateway } = await import("@wopr-network/platform-core/gateway");
     const { DrizzleMeterEventRepository, MeterEmitter } = await import("@wopr-network/platform-core/metering");
     const { DrizzleBudgetChecker } = await import("@wopr-network/platform-core/monetization");
 
@@ -176,14 +180,15 @@ async function main() {
       dlqPath: `${config.FLEET_DATA_DIR}/meter-dlq`,
     });
     const budgetChecker = new DrizzleBudgetChecker(platformDb);
-    const serviceKeyRepo = new DrizzleServiceKeyRepository(platformDb);
 
     mountGateway(app, {
       meter,
       budgetChecker,
-      creditLedger,
+      creditLedger: container.creditLedger,
       providers: { openrouter: { apiKey: config.OPENROUTER_API_KEY } },
       resolveServiceKey: async (key: string) => {
+        const serviceKeyRepo = container.gateway?.serviceKeyRepo;
+        if (!serviceKeyRepo) return null;
         const tenant = await serviceKeyRepo.resolve(key);
         if (tenant) tenant.type = "platform_service";
         return tenant;
@@ -194,7 +199,7 @@ async function main() {
     logger.warn("OPENROUTER_API_KEY not set — inference gateway disabled");
   }
 
-  // ─── 8. tRPC dependency wiring ──────────────────────────────────────
+  // ─── 8. tRPC dependency wiring ───────────────────────────────────────
   {
     const { setBillingRouterDeps } = await import("./trpc/routers/billing.js");
     const { setSettingsRouterDeps } = await import("./trpc/routers/settings.js");
@@ -203,11 +208,8 @@ async function main() {
 
     // Org router deps
     const { BetterAuthUserRepository } = await import("@wopr-network/platform-core/db");
-    const { DrizzleOrgRepository, OrgService } = await import("@wopr-network/platform-core/tenancy");
-    const authUserRepo = new BetterAuthUserRepository(pool);
-    const orgRepo = new DrizzleOrgRepository(platformDb);
-    const orgService = new OrgService(orgRepo, orgMemberRepo, platformDb, { userRepo: authUserRepo });
-    setOrgRouterDeps({ orgService, authUserRepo, creditLedger });
+    const authUserRepo = new BetterAuthUserRepository(container.pool);
+    setOrgRouterDeps({ orgService: container.orgService, authUserRepo, creditLedger: container.creditLedger });
 
     // Billing deps (Stripe)
     const stripeKey = config.STRIPE_SECRET_KEY;
@@ -239,7 +241,7 @@ async function main() {
         tenantRepo,
         webhookSecret: config.STRIPE_WEBHOOK_SECRET ?? "",
         priceMap,
-        creditLedger,
+        creditLedger: container.creditLedger,
       });
 
       const usageSummaryRepo = new DrizzleUsageSummaryRepository(platformDb);
@@ -252,7 +254,7 @@ async function main() {
       setBillingRouterDeps({
         processor,
         tenantRepo,
-        creditLedger,
+        creditLedger: container.creditLedger,
         meterAggregator,
         priceMap,
         autoTopupSettingsStore,
@@ -262,7 +264,14 @@ async function main() {
       });
 
       // Re-wire org with billing deps
-      setOrgRouterDeps({ orgService, authUserRepo, creditLedger, meterAggregator, processor, priceMap });
+      setOrgRouterDeps({
+        orgService: container.orgService,
+        authUserRepo,
+        creditLedger: container.creditLedger,
+        meterAggregator,
+        processor,
+        priceMap,
+      });
       logger.info("Billing tRPC router wired (Stripe + all repositories)");
     } else {
       logger.warn("STRIPE_SECRET_KEY not set — billing tRPC procedures will fail until configured");
@@ -286,27 +295,7 @@ async function main() {
     logger.info("tRPC router deps wired");
   }
 
-  // ─── 8b. Mount tRPC ─────────────────────────────────────────────────
-  async function createTRPCContext(req: Request): Promise<TRPCContext> {
-    let user: AuthUser | undefined;
-    let tenantId: string | undefined;
-    try {
-      const { getAuth } = await import("@wopr-network/platform-core/auth/better-auth");
-      const auth = getAuth();
-      const session = await auth.api.getSession({ headers: req.headers });
-      if (session?.user) {
-        const sessionUser = session.user as { id: string; role?: string };
-        const roles: string[] = [];
-        if (sessionUser.role) roles.push(sessionUser.role);
-        user = { id: sessionUser.id, roles };
-        tenantId = req.headers.get("x-tenant-id") || sessionUser.id;
-      }
-    } catch {
-      // Session resolution failed — user stays undefined
-    }
-    return { user, tenantId };
-  }
-
+  // ─── 8b. Mount tRPC ──────────────────────────────────────────────────
   const { appRouter } = await import("./trpc/index.js");
   app.all("/trpc/*", async (c) => {
     const response = await fetchRequestHandler({
@@ -319,7 +308,7 @@ async function main() {
   });
   logger.info("tRPC router mounted at /trpc/*");
 
-  // ─── 9. Flow engine ────────────────────────────────────────────────
+  // ─── 9. Flow engine ──────────────────────────────────────────────────
   const tenantId = "default";
   const repos = createScopedRepos(engineDb, tenantId);
 
@@ -395,14 +384,14 @@ async function main() {
   // Start reaper
   const stopReaper = engine.startReaper(30_000);
 
-  // ─── 9b. FlowEditService (direct gateway call — no runner needed) ───
+  // ─── 9b. FlowEditService (direct gateway call — no runner needed) ────
   const { FlowEditService } = await import("./flows/flow-edit-service.js");
-  const flowEditService: FlowEditService = new FlowEditService({
+  const flowEditService = new FlowEditService({
     gatewayUrl: config.APP_BASE_URL ? `${config.APP_BASE_URL}/v1` : "http://localhost:3001/v1",
     platformServiceKey: config.HOLYSHIP_PLATFORM_SERVICE_KEY ?? config.HOLYSHIP_GATEWAY_KEY ?? "",
   });
 
-  // ─── 9c. Reactive worker pool (ephemeral holyshipper containers) ───
+  // ─── 9c. Reactive worker pool (ephemeral holyshipper containers) ─────
   let holyshipperFleetManager: import("./fleet/provision-holyshipper.js").IFleetManager | undefined;
   if (config.HOLYSHIP_WORKER_IMAGE && config.HOLYSHIP_GATEWAY_KEY) {
     try {
@@ -453,7 +442,7 @@ async function main() {
     logger.info("Worker pool disabled (HOLYSHIP_WORKER_IMAGE or HOLYSHIP_GATEWAY_KEY not set)");
   }
 
-  // ─── 10. Engine REST routes (claim/report for holyshippers) ────────
+  // ─── 10. Engine REST routes (claim/report for holyshippers) ──────────
   app.route(
     "/api",
     createEngineRoutes({
@@ -464,7 +453,7 @@ async function main() {
     }),
   );
 
-  // ─── 11. Ship It routes ────────────────────────────────────────────
+  // ─── 11. Ship It routes ──────────────────────────────────────────────
   app.route(
     "/api/ship-it",
     createShipItRoutes({
@@ -498,7 +487,7 @@ async function main() {
     }),
   );
 
-  // ─── 12. GitHub webhook routes ─────────────────────────────────────
+  // ─── 12. GitHub webhook routes ───────────────────────────────────────
   if (config.GITHUB_WEBHOOK_SECRET) {
     app.route(
       "/api/github/webhook",
@@ -520,7 +509,7 @@ async function main() {
     logger.info("GitHub webhook routes mounted");
   }
 
-  // ─── 12b. GitHub repos endpoint (for dashboard + ship-it UI) ────────
+  // ─── 12b. GitHub repos endpoint (for dashboard + ship-it UI) ─────────
   if (hasGitHubApp) {
     app.get("/api/github/repos", async (c) => {
       try {
@@ -601,7 +590,7 @@ async function main() {
     logger.info("GitHub issues endpoint mounted");
   }
 
-  // ─── 12c+12d. Flow editor + interrogation routes ────────────────────
+  // ─── 12c+12d. Flow editor + interrogation routes ─────────────────────
   {
     const { InterrogationService } = await import("./flows/interrogation-service.js");
     const { GapActualizationService } = await import("./flows/gap-actualization-service.js");
@@ -678,30 +667,7 @@ async function main() {
     logger.info("Interrogation routes mounted");
   }
 
-  // ─── 13. Crypto payments (key server + EVM watchers) ────────────────
-  if (config.CRYPTO_SERVICE_URL && config.CRYPTO_WEBHOOK_SECRET) {
-    try {
-      const { DrizzleCryptoChargeRepository, DrizzleWebhookSeenRepository } = await import(
-        "@wopr-network/platform-core/billing"
-      );
-      const { setCryptoWebhookDeps } = await import("./routes/crypto-webhook.js");
-
-      const cryptoChargeRepo = new DrizzleCryptoChargeRepository(platformDb);
-      const replayGuard = new DrizzleWebhookSeenRepository(platformDb);
-
-      // Wire webhook route deps
-      setCryptoWebhookDeps({ chargeStore: cryptoChargeRepo, creditLedger, replayGuard }, config.CRYPTO_WEBHOOK_SECRET);
-
-      // Mount crypto webhook route
-      const { cryptoWebhookRoutes } = await import("./routes/crypto-webhook.js");
-      app.route("/api/webhooks/crypto", cryptoWebhookRoutes);
-      logger.info("Crypto webhook mounted (key server)");
-    } catch (err) {
-      logger.warn("Crypto payment setup failed (non-fatal)", (err as Error).message);
-    }
-  }
-
-  // ─── 14. Notification pipeline (best-effort) ──────────────────────
+  // ─── 13. Notification pipeline (best-effort) ─────────────────────────
   if (config.RESEND_API_KEY) {
     try {
       const {
@@ -715,9 +681,10 @@ async function main() {
 
       // biome-ignore lint/suspicious/noExplicitAny: PgDatabase generic
       const pgDb = platformDb as any;
+      const productConfig = container.productConfig;
       const emailClient = getEmailClient({
-        from: _productConfig?.product.fromEmail || undefined,
-        replyTo: _productConfig?.product.emailSupport || undefined,
+        from: productConfig.product?.fromEmail || undefined,
+        replyTo: productConfig.product?.emailSupport || undefined,
       });
       const queueStore = new DrizzleNotificationQueueStore(platformDb);
       const prefsStore = new DrizzleNotificationPreferencesStore(platformDb);
@@ -746,24 +713,22 @@ async function main() {
     }
   }
 
-  // ─── 14. Serve ─────────────────────────────────────────────────────
-  const server = serve({ fetch: app.fetch, hostname: config.HOST, port: config.PORT }, () => {
-    logger.info(`holyship listening on ${config.HOST}:${config.PORT}`);
-    if (hasGitHubApp) {
-      logger.info("GitHub App configured — primitive gates and Ship It are live");
-    } else {
-      logger.warn("GitHub App not configured — primitive gates will fail");
-    }
-  }) as import("node:http").Server;
+  // ─── 14. Start server ────────────────────────────────────────────────
+  await platform.start();
+  logger.info(`holyship listening on ${config.HOST}:${config.PORT}`);
+  if (hasGitHubApp) {
+    logger.info("GitHub App configured — primitive gates and Ship It are live");
+  } else {
+    logger.warn("GitHub App not configured — primitive gates will fail");
+  }
 
-  // ─── Graceful shutdown ─────────────────────────────────────────────
+  // ─── Graceful shutdown ───────────────────────────────────────────────
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
+    process.on(signal, async () => {
       logger.info(`Received ${signal}, shutting down`);
       void stopReaper();
       if (notificationWorkerTimer) clearInterval(notificationWorkerTimer);
-      server.close();
-      pool.end().catch(() => {});
+      await platform.stop();
       process.exit(0);
     });
   }
